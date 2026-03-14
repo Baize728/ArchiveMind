@@ -1,8 +1,8 @@
 package com.zyh.archivemind.service;
 
-
 import com.zyh.archivemind.model.FileUpload;
 import com.zyh.archivemind.model.User;
+import com.zyh.archivemind.repository.DocumentVectorRepository;
 import com.zyh.archivemind.repository.FileUploadRepository;
 import com.zyh.archivemind.repository.UserRepository;
 import io.minio.GetObjectArgs;
@@ -21,6 +21,7 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * 文档管理服务类
@@ -34,10 +35,17 @@ public class DocumentService {
     @Autowired
     private FileUploadRepository fileUploadRepository;
 
+    @Autowired
+    private DocumentVectorRepository documentVectorRepository;
 
     @Autowired
     private MinioClient minioClient;
 
+    @Autowired
+    private ElasticsearchService elasticsearchService;
+
+    @Autowired
+    private OrgTagCacheService orgTagCacheService;
 
     @Autowired
     private UserRepository userRepository;
@@ -61,6 +69,15 @@ public class DocumentService {
             FileUpload fileUpload = fileUploadRepository.findByFileMd5AndUserId(fileMd5, userId)
                     .orElseThrow(() -> new RuntimeException("文件不存在"));
             
+            // 1. 删除Elasticsearch中的数据
+            try {
+                elasticsearchService.deleteByFileMd5(fileMd5);
+                logger.info("成功从Elasticsearch删除文档: {}", fileMd5);
+            } catch (Exception e) {
+                logger.error("从Elasticsearch删除文档时出错: {}", fileMd5, e);
+                // 继续删除其他数据
+            }
+            
             // 2. 删除MinIO中的文件
             try {
                 String objectName = "merged/" + fileUpload.getFileName();
@@ -76,6 +93,15 @@ public class DocumentService {
                 // 继续删除其他数据
             }
             
+            // 3. 删除DocumentVector记录
+            try {
+                documentVectorRepository.deleteByFileMd5(fileMd5);
+                logger.info("成功删除文档向量记录: {}", fileMd5);
+            } catch (Exception e) {
+                logger.error("删除文档向量记录时出错: {}", fileMd5, e);
+                // 继续删除其他数据
+            }
+            
             // 4. 删除FileUpload记录
             fileUploadRepository.deleteByFileMd5(fileMd5);
             logger.info("成功删除文件上传记录: {}", fileMd5);
@@ -87,7 +113,44 @@ public class DocumentService {
         }
     }
     
-
+    /**
+     * 获取用户可访问的所有文件列表
+     * 包括用户自己的文件、公开文件和用户所属组织的文件（支持层级权限）
+     *
+     * @param userId 用户ID
+     * @param orgTags 用户所属的组织标签（逗号分隔的字符串，仅供兼容性使用）
+     * @return 用户可访问的文件列表
+     */
+    public List<FileUpload> getAccessibleFiles(String userId, String orgTags) {
+        logger.info("获取用户可访问文件列表: userId={}", userId);
+        
+        try {
+            // 获取用户有效的组织标签（包含层级关系）
+            User user = userRepository.findByUsername(userId)
+                .orElseThrow(() -> new RuntimeException("用户不存在: " + userId));
+            
+            List<String> userEffectiveTags = orgTagCacheService.getUserEffectiveOrgTags(user.getUsername());
+            logger.debug("用户有效组织标签: {}", userEffectiveTags);
+            
+            // 使用有效标签查询文件
+            List<FileUpload> files;
+            if (userEffectiveTags.isEmpty()) {
+                // 如果用户没有任何组织标签，只返回自己的文件和公开文件
+                files = fileUploadRepository.findByUserIdOrIsPublicTrue(userId);
+                logger.debug("用户无组织标签，仅返回个人和公开文件");
+            } else {
+                // 查询用户可访问的所有文件（考虑层级标签）
+                files = fileUploadRepository.findAccessibleFilesWithTags(userId, userEffectiveTags);
+                logger.debug("使用有效组织标签查询文件");
+            }
+            
+            logger.info("成功获取用户可访问文件列表: userId={}, fileCount={}", userId, files.size());
+            return files;
+        } catch (Exception e) {
+            logger.error("获取用户可访问文件列表失败: userId={}", userId, e);
+            throw new RuntimeException("获取可访问文件列表失败: " + e.getMessage(), e);
+        }
+    }
     
     /**
      * 获取用户上传的所有文件列表
@@ -245,9 +308,8 @@ public class DocumentService {
      * 格式化文件大小
      */
     private String formatFileSize(Long size) {
-        if (size == null) {
-            return "未知";
-        }
+        if (size == null) return "未知";
+        
         if (size < 1024) {
             return size + " B";
         } else if (size < 1024 * 1024) {
@@ -256,27 +318,6 @@ public class DocumentService {
             return String.format("%.1f MB", size / (1024.0 * 1024.0));
         } else {
             return String.format("%.1f GB", size / (1024.0 * 1024.0 * 1024.0));
-        }
-    }
-
-    /**
-     * 获取用户可访问的所有文件列表
-     * 包括用户自己的文件、公开文件和用户所属组织的文件（支持层级权限）
-     *
-     * @param userId 用户ID
-     * @param orgTags 用户所属的组织标签（逗号分隔的字符串，仅供兼容性使用）
-     * @return 用户可访问的文件列表
-     */
-    public List<FileUpload> getAccessibleFiles(String userId, String orgTags) {
-        logger.info("获取用户可访问文件列表: userId={}", userId);
-        try {
-            // 使用有效标签查询文件
-            List<FileUpload> files=fileUploadRepository.findByUserIdOrIsPublicTrue(userId);
-            logger.info("成功获取用户可访问文件列表: userId={}, fileCount={}", userId, files.size());
-            return files;
-        } catch (Exception e) {
-            logger.error("获取用户可访问文件列表失败: userId={}", userId, e);
-            throw new RuntimeException("获取可访问文件列表失败: " + e.getMessage(), e);
         }
     }
 } 

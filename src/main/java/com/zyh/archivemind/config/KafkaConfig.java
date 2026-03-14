@@ -90,7 +90,9 @@ public class KafkaConfig {
             ConsumerFactory<String, Object> consumerFactory,
             KafkaTemplate<String, Object> kafkaTemplate) {
         // 当重试失败后，消息发送至 file-processing-dlt 主题，分区与原消息保持一致
-        DeadLetterPublishingRecoverer recoverer = new DeadLetterPublishingRecoverer(kafkaTemplate, (record, ex) -> new TopicPartition(fileProcessingDltTopic, record.partition()));
+        DeadLetterPublishingRecoverer recoverer = new DeadLetterPublishingRecoverer(
+                kafkaTemplate,
+                (record, ex) -> new TopicPartition(fileProcessingDltTopic, record.partition()));
 
         // 固定退避策略：每 3 秒重试一次，最多重试 4 次（加首次共 5 次）
         DefaultErrorHandler errorHandler = new DefaultErrorHandler(recoverer, new FixedBackOff(3000L, 4));

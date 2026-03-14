@@ -1,9 +1,11 @@
 package com.zyh.archivemind.consumer;
 
 
+import com.zyh.archivemind.service.ParseService;
+import com.zyh.archivemind.service.VectorizationService;
 import com.zyh.archivemind.config.KafkaConfig;
 import com.zyh.archivemind.model.FileProcessingTask;
-import com.zyh.archivemind.service.ParseService;
+import io.minio.MinioClient;
 import io.minio.errors.*;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,12 +23,14 @@ import java.security.NoSuchAlgorithmException;
 public class FileProcessingConsumer {
 
     private final ParseService parseService;
+    private final VectorizationService vectorizationService;
     @Autowired
     private KafkaConfig kafkaConfig;
 
 
-    public FileProcessingConsumer(ParseService parseService) {
+    public FileProcessingConsumer(ParseService parseService, VectorizationService vectorizationService) {
         this.parseService = parseService;
+        this.vectorizationService = vectorizationService;
     }
 
     @KafkaListener(topics = "#{kafkaConfig.getFileProcessingTopic()}", groupId = "#{kafkaConfig.getFileProcessingGroupId()}")
@@ -54,6 +58,9 @@ public class FileProcessingConsumer {
                     task.getUserId(), task.getOrgTag(), task.isPublic());
             log.info("文件解析完成，fileMd5: {}", task.getFileMd5());
 
+            // 向量化处理
+            vectorizationService.vectorize(task.getFileMd5(), 
+                    task.getUserId(), task.getOrgTag(), task.isPublic());
             log.info("向量化完成，fileMd5: {}", task.getFileMd5());
         } catch (Exception e) {
             log.error("Error processing task: {}", task, e);

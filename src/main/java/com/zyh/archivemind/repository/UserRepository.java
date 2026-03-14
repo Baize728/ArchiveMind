@@ -1,6 +1,5 @@
 package com.zyh.archivemind.repository;
 
-
 import com.zyh.archivemind.model.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 

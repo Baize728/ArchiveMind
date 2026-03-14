@@ -1,6 +1,5 @@
 package com.zyh.archivemind.config;
 
-
 import com.zyh.archivemind.model.User;
 import com.zyh.archivemind.repository.UserRepository;
 import com.zyh.archivemind.utils.PasswordUtil;

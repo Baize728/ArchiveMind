@@ -1,6 +1,5 @@
 package com.zyh.archivemind.repository;
 
-
 import com.zyh.archivemind.model.FileUpload;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;

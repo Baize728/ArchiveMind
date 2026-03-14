@@ -1,8 +1,5 @@
 package com.zyh.archivemind.utils;
 
-import com.zyh.archivemind.model.User;
-import com.zyh.archivemind.repository.UserRepository;
-import com.zyh.archivemind.service.TokenCacheService;
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;
 import org.slf4j.Logger;
@@ -11,7 +8,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
-
+import com.zyh.archivemind.model.User;
+import com.zyh.archivemind.repository.UserRepository;
+import com.zyh.archivemind.service.TokenCacheService;
 
 import javax.crypto.SecretKey;
 import java.util.Base64;
@@ -197,9 +196,7 @@ public class JwtUtils {
     public boolean shouldRefreshToken(String token) {
         try {
             Claims claims = extractClaims(token);
-            if (claims == null) {
-                return false;
-            }
+            if (claims == null) return false;
             
             long expirationTime = claims.getExpiration().getTime();
             long currentTime = System.currentTimeMillis();
@@ -218,9 +215,7 @@ public class JwtUtils {
     public boolean canRefreshExpiredToken(String token) {
         try {
             Claims claims = extractClaimsIgnoreExpiration(token);
-            if (claims == null) {
-                return false;
-            }
+            if (claims == null) return false;
             
             long expirationTime = claims.getExpiration().getTime();
             long currentTime = System.currentTimeMillis();
@@ -239,14 +234,10 @@ public class JwtUtils {
     public String refreshToken(String oldToken) {
         try {
             Claims claims = extractClaimsIgnoreExpiration(oldToken);
-            if (claims == null) {
-                return null;
-            }
+            if (claims == null) return null;
             
             String username = claims.getSubject();
-            if (username == null || username.isEmpty()) {
-                return null;
-            }
+            if (username == null || username.isEmpty()) return null;
             
             // 重新生成token
             String newToken = generateToken(username);

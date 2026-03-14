@@ -1,7 +1,7 @@
 package com.zyh.archivemind.service;
 
-
-import com.hankcs.hanlp.tokenizer.StandardTokenizer;
+import com.zyh.archivemind.model.DocumentVector;
+import com.zyh.archivemind.repository.DocumentVectorRepository;
 import org.apache.tika.exception.TikaException;
 import org.apache.tika.metadata.Metadata;
 import org.apache.tika.parser.ParseContext;
@@ -9,20 +9,24 @@ import org.apache.tika.parser.AutoDetectParser;
 import org.apache.tika.sax.BodyContentHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.xml.sax.SAXException;
-import com.hankcs.hanlp.seg.common.Term;
 
 import java.io.*;
 import java.util.ArrayList;
 import java.util.List;
+import com.hankcs.hanlp.seg.common.Term;
+import com.hankcs.hanlp.tokenizer.StandardTokenizer;
 
 @Service
 public class ParseService {
 
     private static final Logger logger = LoggerFactory.getLogger(ParseService.class);
 
+    @Autowired
+    private DocumentVectorRepository documentVectorRepository;
 
     @Value("${file.parsing.chunk-size}")
     private int chunkSize;
@@ -163,6 +167,35 @@ public class ParseService {
     }
 
     /**
+     * 将子切片列表保存到数据库。
+     *
+     * @param fileMd5         文件的 MD5 哈希值
+     * @param chunks          子切片文本列表
+     * @param userId          上传用户ID
+     * @param orgTag          组织标签
+     * @param isPublic        是否公开
+     * @param startingChunkId 当前批次的起始分片ID
+     * @return 保存后总的分片数量
+     */
+    private int saveChildChunks(String fileMd5, List<String> chunks,
+            String userId, String orgTag, boolean isPublic, int startingChunkId) {
+        int currentChunkId = startingChunkId;
+        for (String chunk : chunks) {
+            currentChunkId++;
+            var vector = new DocumentVector();
+            vector.setFileMd5(fileMd5);
+            vector.setChunkId(currentChunkId);
+            vector.setTextContent(chunk);
+            vector.setUserId(userId);
+            vector.setOrgTag(orgTag);
+            vector.setPublic(isPublic);
+            documentVectorRepository.save(vector);
+        }
+        logger.info("成功保存 {} 个子切片到数据库", chunks.size());
+        return currentChunkId;
+    }
+
+    /**
      * 智能文本分割，保持语义完整性
      */
     private List<String> splitTextIntoChunksWithSemantics(String text, int chunkSize) {
@@ -211,6 +244,7 @@ public class ParseService {
 
         return chunks;
     }
+
     /**
      * 分割长段落，按句子边界
      */
@@ -246,67 +280,45 @@ public class ParseService {
 
         return chunks;
     }
+
     /**
      * 使用HanLP智能分割超长句子，中文按语义切割
      */
     private List<String> splitLongSentence(String sentence, int chunkSize) {
         List<String> chunks = new ArrayList<>();
-
+        
         try {
             // 使用HanLP StandardTokenizer进行分词
             List<Term> termList = StandardTokenizer.segment(sentence);
-
+            
             StringBuilder currentChunk = new StringBuilder();
             for (Term term : termList) {
                 String word = term.word;
-
+                
                 // 如果添加这个词会超过chunk大小限制，且当前chunk不为空
                 if (currentChunk.length() + word.length() > chunkSize && !currentChunk.isEmpty()) {
                     chunks.add(currentChunk.toString());
                     currentChunk = new StringBuilder();
                 }
-
+                
                 currentChunk.append(word);
             }
-
+            
             if (!currentChunk.isEmpty()) {
                 chunks.add(currentChunk.toString());
             }
-
-            logger.debug("HanLP智能分词成功，原文长度: {}, 分词数: {}, 分块数: {}",
+            
+            logger.debug("HanLP智能分词成功，原文长度: {}, 分词数: {}, 分块数: {}", 
                     sentence.length(), termList.size(), chunks.size());
-
+                    
         } catch (Exception e) {
             logger.warn("HanLP分词异常: {}, 使用字符分割作为备用方案", e.getMessage());
             chunks = splitByCharacters(sentence, chunkSize);
-        }
-
+         }
+        
         return chunks;
     }
-
-    /**
-     * 将子切片列表保存到数据库。
-     *
-     * @param fileMd5         文件的 MD5 哈希值
-     * @param chunks          子切片文本列表
-     * @param userId          上传用户ID
-     * @param orgTag          组织标签
-     * @param isPublic        是否公开
-     * @param startingChunkId 当前批次的起始分片ID
-     * @return 保存后总的分片数量
-     */
-    private int saveChildChunks(String fileMd5, List<String> chunks,
-            String userId, String orgTag, boolean isPublic, int startingChunkId) {
-        int currentChunkId = startingChunkId;
-        for (String chunk : chunks) {
-            currentChunkId++;
-        }
-        logger.info("成功保存 {} 个子切片到数据库", chunks.size());
-        return currentChunkId;
-    }
-
-
-
+    
     /**
      * 备用方案：按字符分割
      */

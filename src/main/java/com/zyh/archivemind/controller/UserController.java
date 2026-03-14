@@ -1,7 +1,7 @@
 package com.zyh.archivemind.controller;
 
-
 import com.zyh.archivemind.exception.CustomException;
+
 import com.zyh.archivemind.model.User;
 import com.zyh.archivemind.repository.UserRepository;
 import com.zyh.archivemind.service.UserService;
@@ -150,9 +150,109 @@ public class UserController {
         }
     }
     
-
+    // 获取用户组织标签信息
+    @GetMapping("/org-tags")
+    public ResponseEntity<?> getUserOrgTags(@RequestHeader("Authorization") String token) {
+        LogUtils.PerformanceMonitor monitor = LogUtils.startPerformanceMonitor("GET_USER_ORG_TAGS");
+        String username = null;
+        try {
+            username = jwtUtils.extractUsernameFromToken(token.replace("Bearer ", ""));
+            if (username == null || username.isEmpty()) {
+                LogUtils.logUserOperation("anonymous", "GET_ORG_TAGS", "token_validation", "FAILED_INVALID_TOKEN");
+                monitor.end("获取组织标签失败：无效token");
+                throw new CustomException("Invalid token", HttpStatus.UNAUTHORIZED);
+            }
+            
+            Map<String, Object> orgTagsInfo = userService.getUserOrgTags(username);
+            
+            LogUtils.logUserOperation(username, "GET_ORG_TAGS", "organization_tags", "SUCCESS");
+            monitor.end("获取组织标签成功");
+            
+            return ResponseEntity.ok(Map.of(
+                "code", 200, 
+                "message", "Get user organization tags successful", 
+                "data", orgTagsInfo
+            ));
+        } catch (CustomException e) {
+            LogUtils.logBusinessError("GET_USER_ORG_TAGS", username, "获取用户组织标签失败: %s", e, e.getMessage());
+            monitor.end("获取组织标签失败: " + e.getMessage());
+            return ResponseEntity.status(e.getStatus()).body(Map.of("code", e.getStatus().value(), "message", e.getMessage()));
+        } catch (Exception e) {
+            LogUtils.logBusinessError("GET_USER_ORG_TAGS", username, "获取用户组织标签异常: %s", e, e.getMessage());
+            monitor.end("获取组织标签异常: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("code", 500, "message", "Internal server error"));
+        }
+    }
     
+    // 设置用户主组织标签
+    @PutMapping("/primary-org")
+    public ResponseEntity<?> setPrimaryOrg(@RequestHeader("Authorization") String token, @RequestBody PrimaryOrgRequest request) {
+        LogUtils.PerformanceMonitor monitor = LogUtils.startPerformanceMonitor("SET_PRIMARY_ORG");
+        String username = null;
+        try {
+            username = jwtUtils.extractUsernameFromToken(token.replace("Bearer ", ""));
+            if (username == null || username.isEmpty()) {
+                LogUtils.logUserOperation("anonymous", "SET_PRIMARY_ORG", "token_validation", "FAILED_INVALID_TOKEN");
+                monitor.end("设置主组织失败：无效token");
+                throw new CustomException("Invalid token", HttpStatus.UNAUTHORIZED);
+            }
+            
+            if (request.primaryOrg() == null || request.primaryOrg().isEmpty()) {
+                LogUtils.logUserOperation(username, "SET_PRIMARY_ORG", "validation", "FAILED_EMPTY_ORG");
+                monitor.end("设置主组织失败：组织标签为空");
+                return ResponseEntity.badRequest().body(Map.of("code", 400, "message", "Primary organization tag cannot be empty"));
+            }
+            
+            userService.setUserPrimaryOrg(username, request.primaryOrg());
+            
+            LogUtils.logUserOperation(username, "SET_PRIMARY_ORG", request.primaryOrg(), "SUCCESS");
+            monitor.end("设置主组织成功");
+            
+            return ResponseEntity.ok(Map.of("code", 200, "message", "Primary organization set successfully"));
+        } catch (CustomException e) {
+            LogUtils.logBusinessError("SET_PRIMARY_ORG", username, "设置主组织失败: %s", e, e.getMessage());
+            monitor.end("设置主组织失败: " + e.getMessage());
+            return ResponseEntity.status(e.getStatus()).body(Map.of("code", e.getStatus().value(), "message", e.getMessage()));
+        } catch (Exception e) {
+            LogUtils.logBusinessError("SET_PRIMARY_ORG", username, "设置主组织异常: %s", e, e.getMessage());
+            monitor.end("设置主组织异常: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("code", 500, "message", "Internal server error"));
+        }
+    }
 
+    // 获取当前用户组织标签信息 (供上传文件时使用)
+    @GetMapping("/upload-orgs")
+    public ResponseEntity<?> getUploadOrgTags(@RequestAttribute("userId") String userId) {
+        LogUtils.PerformanceMonitor monitor = LogUtils.startPerformanceMonitor("GET_UPLOAD_ORG_TAGS");
+        try {
+            LogUtils.logBusiness("GET_UPLOAD_ORG_TAGS", userId, "获取用户上传组织标签信息");
+            
+            // 获取用户所有组织标签
+            List<String> orgTags = Arrays.asList(userService.getUserOrgTags(userId).get("orgTags").toString().split(","));
+            // 获取用户主组织标签
+            String primaryOrg = userService.getUserPrimaryOrg(userId);
+            
+            Map<String, Object> responseData = new HashMap<>();
+            responseData.put("orgTags", orgTags);
+            responseData.put("primaryOrg", primaryOrg);
+            
+            LogUtils.logUserOperation(userId, "GET_UPLOAD_ORG_TAGS", "upload_organizations", "SUCCESS");
+            monitor.end("获取上传组织标签成功");
+            
+            return ResponseEntity.ok(Map.of(
+                "code", 200, 
+                "message", "获取用户上传组织标签成功", 
+                "data", responseData
+            ));
+        } catch (Exception e) {
+            LogUtils.logBusinessError("GET_UPLOAD_ORG_TAGS", userId, "获取用户上传组织标签失败: %s", e, e.getMessage());
+            monitor.end("获取上传组织标签失败: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
+                "code", 500, 
+                "message", "获取用户上传组织标签失败: " + e.getMessage()
+            ));
+        }
+    }
 
     // 用户登出接口
     @PostMapping("/logout")

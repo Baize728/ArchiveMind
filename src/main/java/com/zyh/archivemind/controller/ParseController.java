@@ -1,6 +1,5 @@
 package com.zyh.archivemind.controller;
 
-
 import com.zyh.archivemind.service.ParseService;
 import com.zyh.archivemind.utils.LogUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,7 +20,7 @@ public class ParseController {
                                                 @RequestAttribute(value = "userId", required = false) String userId) {
         LogUtils.PerformanceMonitor monitor = LogUtils.startPerformanceMonitor("PARSE_DOCUMENT");
         try {
-            LogUtils.logBusiness("PARSE_DOCUMENT", userId != null ? userId : "system",
+            LogUtils.logBusiness("PARSE_DOCUMENT", userId != null ? userId : "system", 
                     "开始解析文档: fileMd5=%s, fileName=%s, fileSize=%d", 
                     fileMd5, file.getOriginalFilename(), file.getSize());
             

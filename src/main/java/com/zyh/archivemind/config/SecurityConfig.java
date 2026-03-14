@@ -1,5 +1,7 @@
 package com.zyh.archivemind.config;
 
+import com.zyh.archivemind.config.JwtAuthenticationFilter;
+import com.zyh.archivemind.config.OrgTagAuthorizationFilter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,6 +26,9 @@ public class SecurityConfig {
 
     @Autowired
     private JwtAuthenticationFilter jwtAuthenticationFilter;
+    
+    @Autowired
+    private OrgTagAuthorizationFilter orgTagAuthorizationFilter;
 
     /**
      * 配置SecurityFilterChain bean的方法
@@ -67,7 +72,9 @@ public class SecurityConfig {
                     .sessionManagement(session -> session
                             .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                     // 添加JWT认证过滤器
-                    .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+                    .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+                    // 添加组织标签授权过滤器
+                    .addFilterAfter(orgTagAuthorizationFilter, JwtAuthenticationFilter.class);
 
             // 记录安全配置加载成功的信息
             logger.info("Security configuration loaded successfully.");

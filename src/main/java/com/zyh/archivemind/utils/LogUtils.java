@@ -11,10 +11,10 @@ import org.slf4j.MDC;
 public class LogUtils {
     
     // 业务日志记录器
-    private static final Logger BUSINESS_LOGGER = LoggerFactory.getLogger("com.yizhaoqi.smartpai.business");
+    private static final Logger BUSINESS_LOGGER = LoggerFactory.getLogger("com.zyh.archivemind.business");
     
     // 性能日志记录器
-    private static final Logger PERFORMANCE_LOGGER = LoggerFactory.getLogger("com.yizhaoqi.smartpai.performance");
+    private static final Logger PERFORMANCE_LOGGER = LoggerFactory.getLogger("com.zyh.archivemind.performance");
     
     // MDC键名常量
     public static final String USER_ID = "userId";
