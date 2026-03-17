@@ -1,4 +1,4 @@
-package com.zyh.archivemind.config;
+package com.zyh.archivemind.filter;
 
 import com.zyh.archivemind.service.CustomUserDetailsService;
 import com.zyh.archivemind.utils.JwtUtils;

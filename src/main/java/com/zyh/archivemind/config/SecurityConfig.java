@@ -1,7 +1,7 @@
 package com.zyh.archivemind.config;
 
-import com.zyh.archivemind.config.JwtAuthenticationFilter;
-import com.zyh.archivemind.config.OrgTagAuthorizationFilter;
+import com.zyh.archivemind.filter.JwtAuthenticationFilter;
+import com.zyh.archivemind.filter.OrgTagAuthorizationFilter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;

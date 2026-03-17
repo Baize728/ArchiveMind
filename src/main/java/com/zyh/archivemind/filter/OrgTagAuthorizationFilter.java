@@ -1,4 +1,4 @@
-package com.zyh.archivemind.config;
+package com.zyh.archivemind.filter;
 
 import com.zyh.archivemind.model.FileUpload;
 import com.zyh.archivemind.repository.FileUploadRepository;
