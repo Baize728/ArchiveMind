@@ -8,11 +8,11 @@
         <version>3.4.2</version>
         <relativePath/> <!-- lookup parent from repository -->
     </parent>
-    <groupId>com.yizhaoqi</groupId>
-    <artifactId>SmartPAI</artifactId>
-    <version>0.0.1-SNAPSHOT</version>
-    <name>SmartPAI</name>
-    <description>SmartPAI</description>
+    <groupId>com.zyh.archivemind</groupId>
+    <artifactId>ArchiveMind</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+    <name>ArchiveMind</name>
+    <description>ArchiveMind</description>
     <url/>
     <licenses>
         <license/>

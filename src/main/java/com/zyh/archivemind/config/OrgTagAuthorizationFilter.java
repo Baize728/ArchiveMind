@@ -142,6 +142,7 @@ public class OrgTagAuthorizationFilter extends OncePerRequestFilter {
             
             // 从请求头获取token
             String token = extractToken(request);
+            // 防御性的措施
             if (token == null) {
                 logger.debug("未找到Token，返回401");
                 response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
