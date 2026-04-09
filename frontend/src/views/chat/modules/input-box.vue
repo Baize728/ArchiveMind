@@ -2,6 +2,30 @@
 const chatStore = useChatStore();
 const { input, list, wsStatus, wsData } = storeToRefs(chatStore);
 
+// ── 模型选择 ──────────────────────────────────────────────────────────────
+const providers = ref<Api.Llm.Provider[]>([]);
+const currentProvider = ref('');
+
+async function loadProviders() {
+  try {
+    const { data } = await fetchLlmProviders();
+    if (data) {
+      providers.value = data.providers;
+      currentProvider.value = data.currentProvider;
+    }
+  } catch {
+    // 静默忽略，不影响主功能
+  }
+}
+
+async function handleProviderChange(providerId: string) {
+  const { error } = await setLlmPreference(providerId);
+  if (!error) currentProvider.value = providerId;
+}
+
+onMounted(loadProviders);
+// ─────────────────────────────────────────────────────────────────────────
+
 const latestMessage = computed(() => {
   return list.value[list.value.length - 1] ?? {};
 });
@@ -20,10 +44,20 @@ watch(wsData, val => {
   const data = JSON.parse(val);
   const assistant = list.value[list.value.length - 1];
 
-  if (data.type === 'completion' && data.status === 'finished' && assistant.status !== 'error')
+  if (data.type === 'completion' && data.status === 'finished' && assistant.status !== 'error') {
     assistant.status = 'finished';
-  if (data.error) assistant.status = 'error';
-  else if (data.chunk) {
+  } else if (data.type === 'tool_call') {
+    // 工具调用通知：记录到当前 assistant 消息
+    if (!assistant.toolCalls) assistant.toolCalls = [];
+    const existing = assistant.toolCalls.find(t => t.function === data.function);
+    if (existing) {
+      existing.status = data.status;
+    } else {
+      assistant.toolCalls.push({ function: data.function, status: data.status });
+    }
+  } else if (data.error) {
+    assistant.status = 'error';
+  } else if (data.chunk) {
     assistant.status = 'loading';
     assistant.content += data.chunk;
   }
@@ -96,11 +130,22 @@ const handShortcut = (e: KeyboardEvent) => {
       @keydown="handShortcut"
     />
     <div class="flex items-center justify-between pt-2">
-      <div class="flex items-center text-18px color-gray-500">
-        <NText class="text-14px">连接状态：</NText>
-        <icon-eos-icons:loading v-if="wsStatus === 'CONNECTING'" class="color-yellow" />
-        <icon-fluent:plug-connected-checkmark-20-filled v-else-if="wsStatus === 'OPEN'" class="color-green" />
-        <icon-tabler:plug-connected-x v-else class="color-red" />
+      <div class="flex items-center gap-3 text-18px color-gray-500">
+        <div class="flex items-center">
+          <NText class="text-14px">连接状态：</NText>
+          <icon-eos-icons:loading v-if="wsStatus === 'CONNECTING'" class="color-yellow" />
+          <icon-fluent:plug-connected-checkmark-20-filled v-else-if="wsStatus === 'OPEN'" class="color-green" />
+          <icon-tabler:plug-connected-x v-else class="color-red" />
+        </div>
+        <!-- 模型选择器：有多个 Provider 时才显示 -->
+        <NSelect
+          v-if="providers.length > 1"
+          :value="currentProvider"
+          :options="providers.map(p => ({ label: p.id, value: p.id }))"
+          size="small"
+          class="w-36"
+          @update:value="handleProviderChange"
+        />
       </div>
       <NButton :disabled="sendable" strong circle type="primary" @click="handleSend">
         <template #icon>

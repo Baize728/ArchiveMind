@@ -5,28 +5,15 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 
 /**
- * 全局 AI 相关配置，包含 Prompt 模板和生成参数。
+ * AI 相关配置，目前仅保留 Query Rewriting 配置。
+ * Prompt 和 Generation 配置已迁移至 LlmProperties。
  */
 @Component
 @ConfigurationProperties(prefix = "ai")
 @Data
 public class AiProperties {
 
-    private Prompt prompt = new Prompt();
-    private Generation generation = new Generation();
     private Rewrite rewrite = new Rewrite();
-
-    @Data
-    public static class Prompt {
-        /** 规则文案 */
-        private String rules;
-        /** 引用开始分隔符 */
-        private String refStart;
-        /** 引用结束分隔符 */
-        private String refEnd;
-        /** 无检索结果时的占位文案 */
-        private String noResultText;
-    }
 
     @Data
     public static class Rewrite {
@@ -46,15 +33,5 @@ public class AiProperties {
         private int maxHistoryRounds = 3;
         /** 同步调用超时时间（秒） */
         private int timeoutSeconds = 15;
-    }
-
-    @Data
-    public static class Generation {
-        /** 采样温度 */
-        private Double temperature = 0.3;
-        /** 最大输出 tokens */
-        private Integer maxTokens = 2000;
-        /** nucleus top-p */
-        private Double topP = 0.9;
     }
 }

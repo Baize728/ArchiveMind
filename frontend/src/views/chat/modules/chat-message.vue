@@ -153,6 +153,18 @@ async function handleSourceFileClick(fileName: string) {
         </NText>
         <NText v-else-if="msg.status === 'error'" class="italic color-red-500">服务器繁忙，请稍后再试</NText>
         <div v-else class="rounded-2xl rounded-tl-sm bg-#f5f6f8 px-4 py-3 dark:bg-#1e1e1e" @click="handleContentClick">
+          <!-- 工具调用状态 -->
+          <div v-if="msg.toolCalls?.length" class="mb-2 flex flex-col gap-1">
+            <div
+              v-for="tc in msg.toolCalls"
+              :key="tc.function"
+              class="flex items-center gap-1.5 rounded-lg bg-#e8f4fd px-3 py-1.5 text-12px color-#1890ff dark:bg-#1a2f3f dark:color-#40a9ff"
+            >
+              <icon-eos-icons:loading v-if="tc.status === 'executing'" class="animate-spin text-14px" />
+              <icon-mdi:check-circle-outline v-else class="text-14px color-#52c41a" />
+              <span>{{ tc.status === 'executing' ? `正在调用 ${tc.function}` : `${tc.function} 完成` }}</span>
+            </div>
+          </div>
           <VueMarkdownIt :content="content" />
         </div>
         <div class="mt-1 flex">
