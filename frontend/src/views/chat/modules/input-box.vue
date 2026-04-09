@@ -17,13 +17,36 @@ const sendable = computed(
 );
 
 watch(wsData, val => {
-  const data = JSON.parse(val);
+  let data: any = null;
+  try {
+    data = JSON.parse(val);
+  } catch {
+    console.warn('Failed to parse stream data:', val);
+    return;
+  }
+
+  if (!data) return;
+
   const assistant = list.value[list.value.length - 1];
 
-  if (data.type === 'completion' && data.status === 'finished' && assistant.status !== 'error')
+  // 优先处理 error（兼容旧格式 {"error": "..."}）
+  if (data.error) {
+    assistant.status = 'error';
+    return;
+  }
+
+  if (data.type === 'completion' && data.status === 'finished' && assistant.status !== 'error') {
     assistant.status = 'finished';
-  if (data.error) assistant.status = 'error';
-  else if (data.chunk) {
+  } else if (data.type === 'error') {
+    assistant.status = 'error';
+  } else if (data.type === 'thinking' && data.chunk) {
+    assistant.status = 'loading';
+    assistant.thinkingContent = (assistant.thinkingContent || '') + data.chunk;
+  } else if (data.type === 'answer' && data.chunk) {
+    assistant.status = 'loading';
+    assistant.content += data.chunk;
+  } else if (data.chunk) {
+    // 兼容旧格式：没有 type 字段但有 chunk 的数据视为 answer
     assistant.status = 'loading';
     assistant.content += data.chunk;
   }
@@ -49,6 +72,7 @@ const handleSend = async () => {
   chatStore.wsSend(input.value.message);
   list.value.push({
     content: '',
+    thinkingContent: '',
     role: 'assistant',
     status: 'pending'
   });

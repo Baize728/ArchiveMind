@@ -2,6 +2,7 @@ package com.zyh.archivemind.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zyh.archivemind.client.DeepSeekClient;
+import com.zyh.archivemind.config.AiProperties;
 import com.zyh.archivemind.dto.SessionDTO;
 import net.jqwik.api.*;
 import net.jqwik.api.constraints.AlphaChars;
@@ -71,6 +72,7 @@ class ChatHandlerPropertyTest {
         when(redisTemplate.opsForValue()).thenReturn(valueOperations);
         String wsSessionId = "ws-" + UUID.randomUUID();
         when(wsSession.getId()).thenReturn(wsSessionId);
+        when(wsSession.isOpen()).thenReturn(true);
 
         // Set up an active session ID
         String activeSessionId = UUID.randomUUID().toString();
@@ -89,26 +91,27 @@ class ChatHandlerPropertyTest {
         when(searchService.searchWithPermission(anyString(), anyString(), anyInt()))
                 .thenReturn(new ArrayList<>());
 
-        // Mock DeepSeekClient to immediately invoke onChunk with a response,
-        // so the background thread can detect completion quickly
+        // Mock DeepSeekClient to immediately invoke onAnswerChunk and onComplete callbacks,
+        // matching the new dual-callback + onComplete pattern (Task 5.3 refactoring)
         doAnswer(invocation -> {
             @SuppressWarnings("unchecked")
-            Consumer<String> onChunk = invocation.getArgument(3);
-            onChunk.accept("AI回复");
+            Consumer<String> onAnswerChunk = invocation.getArgument(4);
+            Runnable onComplete = invocation.getArgument(5);
+            onAnswerChunk.accept("AI回复");
+            onComplete.run();
             return null;
         }).when(deepSeekClient).streamResponse(
-                anyString(), anyString(), anyList(), any(), any());
+                anyString(), anyString(), anyList(), any(), any(), any(), any());
 
         // Create ChatHandler
         ChatHandler chatHandler = new ChatHandler(
                 redisTemplate, searchService, deepSeekClient,
-                queryRewriteService, conversationSessionService);
+                queryRewriteService, conversationSessionService, new AiProperties());
 
         // Act: process the message
         chatHandler.processMessage(userId, messageContent, wsSession);
 
-        // Wait for the background thread to complete (it waits 3s + 2s internally)
-        Thread.sleep(6500);
+        // No Thread.sleep needed - onComplete callback triggers synchronously
 
         // Assert 1 (Req 6.1): conversation history was READ from the active session key
         verify(valueOperations, atLeastOnce()).get(expectedKey);
@@ -204,25 +207,27 @@ class ChatHandlerPropertyTest {
         when(searchService.searchWithPermission(anyString(), anyString(), anyInt()))
                 .thenReturn(new ArrayList<>());
 
-        // Mock DeepSeekClient to immediately invoke onChunk with a response
+        // Mock DeepSeekClient to immediately invoke onAnswerChunk and onComplete callbacks,
+        // matching the new dual-callback + onComplete pattern (Task 5.3 refactoring)
         doAnswer(invocation -> {
             @SuppressWarnings("unchecked")
-            Consumer<String> onChunk = invocation.getArgument(3);
-            onChunk.accept("AI回复");
+            Consumer<String> onAnswerChunk = invocation.getArgument(4);
+            Runnable onComplete = invocation.getArgument(5);
+            onAnswerChunk.accept("AI回复");
+            onComplete.run();
             return null;
         }).when(deepSeekClient).streamResponse(
-                anyString(), anyString(), anyList(), any(), any());
+                anyString(), anyString(), anyList(), any(), any(), any(), any());
 
         // Create ChatHandler
         ChatHandler chatHandler = new ChatHandler(
                 redisTemplate, searchService, deepSeekClient,
-                queryRewriteService, conversationSessionService);
+                queryRewriteService, conversationSessionService, new AiProperties());
 
         // Act: process the message
         chatHandler.processMessage(userId, messageContent, wsSession);
 
-        // Wait for the background thread to complete (it waits 3s + 2s internally)
-        Thread.sleep(6500);
+        // No Thread.sleep needed - onComplete callback triggers synchronously
 
         // Assert 1 (Req 6.3): createSession was called because no active session existed
         verify(conversationSessionService, times(1)).createSession(userId);

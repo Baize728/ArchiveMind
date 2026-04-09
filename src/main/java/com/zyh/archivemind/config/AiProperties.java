@@ -15,6 +15,7 @@ public class AiProperties {
     private Prompt prompt = new Prompt();
     private Generation generation = new Generation();
     private Rewrite rewrite = new Rewrite();
+    private Thinking thinking = new Thinking();
 
     @Data
     public static class Prompt {
@@ -56,5 +57,13 @@ public class AiProperties {
         private Integer maxTokens = 2000;
         /** nucleus top-p */
         private Double topP = 0.9;
+    }
+
+    @Data
+    public static class Thinking {
+        /** 是否推送思考过程到前端 */
+        private boolean enabled = true;
+        /** thinkingContent 持久化最大字符数，超出截断 */
+        private int maxPersistLength = 20000;
     }
 }

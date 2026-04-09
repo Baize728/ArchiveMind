@@ -13,6 +13,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import reactor.core.scheduler.Schedulers;
 import com.zyh.archivemind.config.AiProperties;
 
 @Service
@@ -23,6 +24,7 @@ public class DeepSeekClient {
     private final String model;
     private final AiProperties aiProperties;
     private static final Logger logger = LoggerFactory.getLogger(DeepSeekClient.class);
+    private static final ObjectMapper MAPPER = new ObjectMapper();
     
     public DeepSeekClient(@Value("${deepseek.api.url}") String apiUrl,
                          @Value("${deepseek.api.key}") String apiKey,
@@ -44,7 +46,9 @@ public class DeepSeekClient {
     public void streamResponse(String userMessage, 
                              String context,
                              List<Map<String, String>> history,
-                             Consumer<String> onChunk,
+                             Consumer<String> onThinkingChunk,
+                             Consumer<String> onAnswerChunk,
+                             Runnable onComplete,
                              Consumer<Throwable> onError) {
         
         Map<String, Object> request = buildRequest(userMessage, context, history);
@@ -55,8 +59,9 @@ public class DeepSeekClient {
                 .bodyValue(request)
                 .retrieve()
                 .bodyToFlux(String.class)
+                .publishOn(Schedulers.boundedElastic())
                 .subscribe(
-                    chunk -> processChunk(chunk, onChunk),
+                    chunk -> processChunk(chunk, onThinkingChunk, onAnswerChunk, onComplete),
                     onError
                 );
     }
@@ -135,25 +140,32 @@ public class DeepSeekClient {
         return messages;
     }
     
-    private void processChunk(String chunk, Consumer<String> onChunk) {
+    private void processChunk(String chunk, 
+                              Consumer<String> onThinkingChunk,
+                              Consumer<String> onAnswerChunk,
+                              Runnable onComplete) {
         try {
             // 检查是否是结束标记
             if ("[DONE]".equals(chunk)) {
                 logger.debug("对话结束");
+                onComplete.run();
                 return;
             }
             
-            // 直接解析 JSON
-            ObjectMapper mapper = new ObjectMapper();
-            JsonNode node = mapper.readTree(chunk);
-            String content = node.path("choices")
-                               .path(0)
-                               .path("delta")
-                               .path("content")
-                               .asText("");
+            // 直接解析 JSON（复用类级别 ObjectMapper 实例）
+            JsonNode node = MAPPER.readTree(chunk);
+            JsonNode delta = node.path("choices").path(0).path("delta");
             
+            // 提取思考过程内容（DeepSeek R1 模型特有字段）
+            String reasoningContent = delta.path("reasoning_content").asText("");
+            if (!reasoningContent.isEmpty()) {
+                onThinkingChunk.accept(reasoningContent);
+            }
+            
+            // 提取回答内容
+            String content = delta.path("content").asText("");
             if (!content.isEmpty()) {
-                onChunk.accept(content);
+                onAnswerChunk.accept(content);
             }
         } catch (Exception e) {
             logger.error("处理数据块时出错: {}", e.getMessage(), e);

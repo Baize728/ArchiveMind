@@ -2,6 +2,7 @@ package com.zyh.archivemind.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zyh.archivemind.client.DeepSeekClient;
+import com.zyh.archivemind.config.AiProperties;
 import com.zyh.archivemind.dto.SessionDTO;
 import com.zyh.archivemind.entity.SearchResult;
 import org.junit.jupiter.api.BeforeEach;
@@ -46,7 +47,8 @@ class ChatHandlerTest {
 
     @BeforeEach
     void setUp() {
-        chatHandler = new ChatHandler(redisTemplate, searchService, deepSeekClient, queryRewriteService, conversationSessionService);
+        AiProperties aiProperties = new AiProperties();
+        chatHandler = new ChatHandler(redisTemplate, searchService, deepSeekClient, queryRewriteService, conversationSessionService, aiProperties);
         lenient().when(redisTemplate.opsForValue()).thenReturn(valueOperations);
         lenient().when(session.getId()).thenReturn("test-session-id");
     }
@@ -75,7 +77,7 @@ class ChatHandlerTest {
         verify(searchService).searchWithPermission(queryCaptor.capture(), eq("user1"), eq(5));
         assertThat(queryCaptor.getValue()).isEqualTo("iPhone 14有分期付款服务吗？");
 
-        verify(deepSeekClient).streamResponse(eq("那有分期吗？"), anyString(), anyList(), any(), any());
+        verify(deepSeekClient).streamResponse(eq("那有分期吗？"), anyString(), anyList(), any(), any(), any(), any());
     }
 
     @Test
@@ -145,7 +147,7 @@ class ChatHandlerTest {
         chatHandler.processMessage("user4", "有什么规范？", session);
 
         ArgumentCaptor<String> contextCaptor = ArgumentCaptor.forClass(String.class);
-        verify(deepSeekClient).streamResponse(eq("有什么规范？"), contextCaptor.capture(), anyList(), any(), any());
+        verify(deepSeekClient).streamResponse(eq("有什么规范？"), contextCaptor.capture(), anyList(), any(), any(), any(), any());
         assertThat(contextCaptor.getValue()).contains("档案管理规范第一条内容");
     }
 }

@@ -184,6 +184,7 @@ declare namespace Api {
     interface Message {
       role: 'user' | 'assistant';
       content: string;
+      thinkingContent?: string;
       status?: 'pending' | 'loading' | 'finished' | 'error';
       timestamp?: string;
     }

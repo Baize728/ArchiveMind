@@ -3,6 +3,7 @@
 import { nextTick } from 'vue';
 import { VueMarkdownIt } from 'vue-markdown-shiki';
 import { formatDate } from '@/utils/common';
+import ThinkingSection from './thinking-section.vue';
 defineOptions({ name: 'ChatMessage' });
 
 const props = defineProps<{ msg: Api.Chat.Message }>();
@@ -152,8 +153,15 @@ async function handleSourceFileClick(fileName: string) {
           <icon-eos-icons:three-dots-loading class="text-8" />
         </NText>
         <NText v-else-if="msg.status === 'error'" class="italic color-red-500">服务器繁忙，请稍后再试</NText>
-        <div v-else class="rounded-2xl rounded-tl-sm bg-#f5f6f8 px-4 py-3 dark:bg-#1e1e1e" @click="handleContentClick">
-          <VueMarkdownIt :content="content" />
+        <div v-else>
+          <ThinkingSection
+            v-if="msg.thinkingContent"
+            :content="msg.thinkingContent"
+            :status="msg.status"
+          />
+          <div class="rounded-2xl rounded-tl-sm bg-#f5f6f8 px-4 py-3 dark:bg-#1e1e1e" @click="handleContentClick">
+            <VueMarkdownIt :content="content" />
+          </div>
         </div>
         <div class="mt-1 flex">
           <NButton quaternary size="tiny" @click="handleCopy(msg.content)">

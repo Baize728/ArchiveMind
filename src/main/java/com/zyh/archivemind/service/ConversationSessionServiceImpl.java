@@ -172,7 +172,11 @@ public class ConversationSessionServiceImpl implements ConversationSessionServic
             // 获取消息历史
             List<Message> messages = redisRepository.getConversationHistory(sessionId);
             List<MessageDTO> messageDTOs = messages.stream()
-                    .map(m -> new MessageDTO(m.getRole(), m.getContent(), null))
+                    .map(m -> MessageDTO.builder()
+                            .role(m.getRole())
+                            .content(m.getContent())
+                            .thinkingContent(m.getThinkingContent())
+                            .build())
                     .collect(Collectors.toList());
 
             return new SessionDetailDTO(

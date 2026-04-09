@@ -162,7 +162,7 @@ class ConversationSessionControllerTest {
         void switchSession_success_returns200() {
             when(jwtUtils.extractUsernameFromToken("valid-jwt-token")).thenReturn(USER_ID);
             LocalDateTime now = LocalDateTime.now();
-            List<MessageDTO> messages = List.of(new MessageDTO("user", "hello", "2025-01-01T10:00:00"));
+            List<MessageDTO> messages = List.of(MessageDTO.builder().role("user").content("hello").timestamp("2025-01-01T10:00:00").build());
             SessionDetailDTO detail = new SessionDetailDTO("s1", "对话1", now, messages);
             when(conversationSessionService.switchSession(USER_ID, "s1")).thenReturn(detail);
 

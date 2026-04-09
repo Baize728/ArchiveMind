@@ -4,10 +4,12 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zyh.archivemind.client.DeepSeekClient;
+import com.zyh.archivemind.config.AiProperties;
 import com.zyh.archivemind.entity.SearchResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
@@ -19,7 +21,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -37,45 +38,57 @@ public class ChatHandler {
     private final DeepSeekClient deepSeekClient;
     private final QueryRewriteService queryRewriteService;
     private final ConversationSessionService conversationSessionService;
+    private final AiProperties aiProperties;
     private final ObjectMapper objectMapper;
     
     // 用于存储每个会话的完整响应
     private final Map<String, StringBuilder> responseBuilders = new ConcurrentHashMap<>();
-    // 用于跟踪每个会话的响应完成状态
-    private final Map<String, CompletableFuture<String>> responseFutures = new ConcurrentHashMap<>();
     // 停止标志 - 简单方案
     private final Map<String, Boolean> stopFlags = new ConcurrentHashMap<>();
+    // 用于累积每个会话的思考过程内容
+    private final Map<String, StringBuilder> thinkingBuilders = new ConcurrentHashMap<>();
+    // 存储每个 session 关联的 conversationId，避免闭包变量作用域问题（S2 修复）
+    private final Map<String, String> sessionConversationIds = new ConcurrentHashMap<>();
+    // 存储每个 session 关联的 userId，避免闭包变量作用域问题（S2 修复）
+    private final Map<String, String> sessionUserIds = new ConcurrentHashMap<>();
+    // 记录每个 session 的开始时间，用于定时清理 stale session 数据
+    private final Map<String, Long> sessionStartTimes = new ConcurrentHashMap<>();
 
     public ChatHandler(RedisTemplate<String, String> redisTemplate,
                       HybridSearchService searchService,
                       DeepSeekClient deepSeekClient,
                       QueryRewriteService queryRewriteService,
-                      ConversationSessionService conversationSessionService) {
+                      ConversationSessionService conversationSessionService,
+                      AiProperties aiProperties) {
         this.redisTemplate = redisTemplate;
         this.searchService = searchService;
         this.deepSeekClient = deepSeekClient;
         this.queryRewriteService = queryRewriteService;
         this.conversationSessionService = conversationSessionService;
+        this.aiProperties = aiProperties;
         this.objectMapper = new ObjectMapper();
     }
 
     public void processMessage(String userId, String userMessage, WebSocketSession session) {
         logger.info("开始处理消息，用户ID: {}, 会话ID: {}", userId, session.getId());
         try {
+            final String sessionId = session.getId();
+
             // 1. 获取或创建会话 ID
             String conversationId = getOrCreateConversationId(userId);
             logger.info("会话ID: {}, 用户ID: {}", conversationId, userId);
-            
-            // 为当前会话创建响应构建器
-            responseBuilders.put(session.getId(), new StringBuilder());
-            // 创建一个CompletableFuture来跟踪响应完成状态
-            CompletableFuture<String> responseFuture = new CompletableFuture<>();
-            responseFutures.put(session.getId(), responseFuture);
-            
+
+            // 初始化 session 关联数据
+            responseBuilders.put(sessionId, new StringBuilder());
+            thinkingBuilders.put(sessionId, new StringBuilder());
+            sessionConversationIds.put(sessionId, conversationId);
+            sessionUserIds.put(sessionId, userId);
+            sessionStartTimes.put(sessionId, System.currentTimeMillis());
+
             // 2. 获取对话历史
             List<Map<String, String>> history = getConversationHistory(conversationId);
             logger.debug("获取到 {} 条历史对话", history.size());
-            
+
             // 2.5 如果是第一条消息，自动生成会话标题
             if (history.isEmpty()) {
                 try {
@@ -85,181 +98,82 @@ public class ChatHandler {
                     logger.warn("自动生成标题失败，会话ID: {}, 错误: {}", conversationId, e.getMessage());
                 }
             }
-            
+
             // 3. Query Rewriting：结合对话历史改写当前问题，生成语义完整的检索查询
             String rewrittenQuery = queryRewriteService.rewrite(userMessage, history);
             logger.info("检索用查询: {}", rewrittenQuery);
-            
+
             // 4. 使用改写后的查询执行带权限过滤的混合搜索
             List<SearchResult> searchResults = searchService.searchWithPermission(rewrittenQuery, userId, 5);
             logger.debug("搜索结果数量: {}", searchResults.size());
-            
+
             // 5. 构建上下文
             String context = buildContext(searchResults);
-            
+
             // 6. 调用 DeepSeek API 并处理流式响应（使用原始用户消息，保持对话自然）
             logger.info("调用DeepSeek API生成回复");
-            deepSeekClient.streamResponse(userMessage, context, history, 
-                chunk -> {
-                    // 累积响应内容
-                    StringBuilder responseBuilder = responseBuilders.get(session.getId());
-                    if (responseBuilder != null) {
-                        responseBuilder.append(chunk);
+            deepSeekClient.streamResponse(userMessage, context, history,
+                // onThinkingChunk - 累积思考内容并推送 thinking 类型消息
+                thinkingChunk -> {
+                    if (!session.isOpen()) return;
+                    StringBuilder thinkingBuilder = thinkingBuilders.get(sessionId);
+                    if (thinkingBuilder != null) {
+                        thinkingBuilder.append(thinkingChunk);
                     }
-                    sendResponseChunk(session, chunk);
+                    sendThinkingChunk(session, thinkingChunk);
                 },
-                error -> {
-                    // 处理错误并完成future
-                    handleError(session, error);
-                    // 发送响应完成通知（错误情况）
-                    sendCompletionNotification(session);
-                    responseFuture.completeExceptionally(error);
-                    // 清理会话响应构建器
-                    responseBuilders.remove(session.getId());
-                    responseFutures.remove(session.getId());
-                });
-            
-            // 7. 启动一个后台任务检查并标记响应完成
-            new Thread(() -> {
-                try {
-                    // 等待最多30秒，给API足够的响应时间
-                    Thread.sleep(3000); // 先等待3秒钟，让API有时间开始响应
-                    
-                    // 获取当前累积的响应内容
-                    StringBuilder responseBuilder = responseBuilders.get(session.getId());
-                    
-                    // 如果响应构建器存在并且已有内容，认为响应已完成
+                // onAnswerChunk - 累积回答内容并推送 answer 类型消息
+                answerChunk -> {
+                    if (!session.isOpen()) return;
+                    StringBuilder responseBuilder = responseBuilders.get(sessionId);
                     if (responseBuilder != null) {
-                        // 记录最后2秒的响应变化，检测是否停止增长
-                        String lastResponse = responseBuilder.toString();
-                        int lastLength = lastResponse.length();
-                        
-                        Thread.sleep(2000); // 再等待2秒
-                        
-                        // 再次检查是否有新内容
-                        if (responseBuilder.length() == lastLength) {
-                            // 没有新内容，可以认为响应已完成
-                            responseFuture.complete(responseBuilder.toString());
-                            logger.info("DeepSeek响应已完成，长度: {}", responseBuilder.length());
-                            
-                            // 发送响应完成通知
-                            sendCompletionNotification(session);
-                            
-                            // 更新对话历史
-                            String completeResponse = responseBuilder.toString();
-                            updateConversationHistory(conversationId, userMessage, completeResponse);
-                            
-                            // 刷新会话 TTL
-                            try {
-                                conversationSessionService.refreshSessionTTL(userId, conversationId);
-                            } catch (Exception ttlEx) {
-                                logger.warn("刷新会话TTL失败，用户ID: {}, 会话ID: {}, 错误: {}", userId, conversationId, ttlEx.getMessage());
-                            }
-                            
-                            // 输出对话存储信息以便调试
-                            String redisKey = "user:" + userId + ":current_conversation";
-                            logger.info("对话存储信息 - Redis键: {}, 值: {}", redisKey, conversationId);
-                            
-                            // 清理会话响应构建器
-                            responseBuilders.remove(session.getId());
-                            responseFutures.remove(session.getId());
-                            logger.info("消息处理完成，用户ID: {}", userId);
-                        } else {
-                            // 仍有新内容，继续等待
-                            logger.debug("响应仍在继续，等待完成...");
-                            // 再等待最多25秒
-                            for (int i = 0; i < 5; i++) {
-                                Thread.sleep(5000);
-                                if (responseBuilder != null) {
-                                    lastLength = responseBuilder.length();
-                                    // 再次检查2秒内是否有新内容
-                                    Thread.sleep(2000);
-                                    if (responseBuilder.length() == lastLength) {
-                                        // 没有新内容，可以认为响应已完成
-                                        responseFuture.complete(responseBuilder.toString());
-                                        
-                                        // 发送响应完成通知
-                                        sendCompletionNotification(session);
-                                        
-                                        // 更新对话历史
-                                        String completeResponse = responseBuilder.toString();
-                                        updateConversationHistory(conversationId, userMessage, completeResponse);
-                                        
-                                        // 刷新会话 TTL
-                                        try {
-                                            conversationSessionService.refreshSessionTTL(userId, conversationId);
-                                        } catch (Exception ttlEx) {
-                                            logger.warn("刷新会话TTL失败，用户ID: {}, 会话ID: {}, 错误: {}", userId, conversationId, ttlEx.getMessage());
-                                        }
-                                        
-                                        // 输出对话存储信息以便调试
-                                        String redisKey = "user:" + userId + ":current_conversation";
-                                        logger.info("对话存储信息 - Redis键: {}, 值: {}", redisKey, conversationId);
-                                        
-                                        // 清理会话响应构建器
-                                        responseBuilders.remove(session.getId());
-                                        responseFutures.remove(session.getId());
-                                        logger.info("消息处理完成，用户ID: {}", userId);
-                                        return;
-                                    }
-                                }
-                            }
-                            
-                            // 如果经过多次检查仍未完成，强制完成
-                            if (!responseFuture.isDone()) {
-                                responseFuture.complete(responseBuilder.toString());
-                                
-                                // 发送响应完成通知
-                                sendCompletionNotification(session);
-                                
-                                // 更新对话历史
-                                String completeResponse = responseBuilder.toString();
-                                updateConversationHistory(conversationId, userMessage, completeResponse);
-                                
-                                // 刷新会话 TTL
-                                try {
-                                    conversationSessionService.refreshSessionTTL(userId, conversationId);
-                                } catch (Exception ttlEx) {
-                                    logger.warn("刷新会话TTL失败，用户ID: {}, 会话ID: {}, 错误: {}", userId, conversationId, ttlEx.getMessage());
-                                }
-                                
-                                // 输出对话存储信息以便调试
-                                String redisKey = "user:" + userId + ":current_conversation";
-                                logger.info("对话存储信息 - Redis键: {}, 值: {}", redisKey, conversationId);
-                                
-                                // 清理会话响应构建器
-                                responseBuilders.remove(session.getId());
-                                responseFutures.remove(session.getId());
-                                logger.info("消息处理强制完成，用户ID: {}", userId);
-                            }
-                        }
-                    } else {
-                        logger.warn("响应构建器为空，可能出现了错误，会话ID: {}", session.getId());
-                        RuntimeException exception = new RuntimeException("响应构建器为空");
-                        responseFuture.completeExceptionally(exception);
-                        // 发送错误消息
-                        handleError(session, exception);
+                        responseBuilder.append(answerChunk);
                     }
-                } catch (Exception e) {
-                    logger.error("检查响应完成时出错: {}", e.getMessage(), e);
-                    responseFuture.completeExceptionally(e);
-                    
-                    // 清理会话响应构建器
-                    responseBuilders.remove(session.getId());
-                    responseFutures.remove(session.getId());
+                    sendAnswerChunk(session, answerChunk);
+                },
+                // onComplete - 替换后台线程轮询逻辑
+                () -> {
+                    String completeResponse = responseBuilders.getOrDefault(sessionId, new StringBuilder()).toString();
+                    String thinkingContent = thinkingBuilders.getOrDefault(sessionId, new StringBuilder()).toString();
+                    String convId = sessionConversationIds.get(sessionId);
+                    String uid = sessionUserIds.get(sessionId);
+
+                    logger.info("DeepSeek响应已完成，回答长度: {}, 思考长度: {}", completeResponse.length(), thinkingContent.length());
+
+                    // 发送完成通知
+                    sendCompletionNotification(session);
+
+                    // 更新对话历史（含思考过程内容）
+                    if (convId != null) {
+                        updateConversationHistory(convId, userMessage, completeResponse, thinkingContent);
+                    }
+
+                    // 刷新会话 TTL
+                    if (uid != null && convId != null) {
+                        try {
+                            conversationSessionService.refreshSessionTTL(uid, convId);
+                        } catch (Exception ttlEx) {
+                            logger.warn("刷新会话TTL失败，用户ID: {}, 会话ID: {}, 错误: {}", uid, convId, ttlEx.getMessage());
+                        }
+                    }
+
+                    // 统一清理 session 关联的临时数据
+                    cleanupSession(sessionId);
+                    logger.info("消息处理完成，用户ID: {}", uid);
+                },
+                // onError - 错误处理
+                error -> {
+                    handleError(session, error);
+                    sendCompletionNotification(session);
+                    cleanupSession(sessionId);
                 }
-            }).start();
-            
+            );
+
         } catch (Exception e) {
             logger.error("处理消息错误: {}", e.getMessage(), e);
             handleError(session, e);
-            // 清理会话响应构建器
-            responseBuilders.remove(session.getId());
-            // 清理响应future
-            CompletableFuture<String> future = responseFutures.remove(session.getId());
-            if (future != null && !future.isDone()) {
-                future.completeExceptionally(e);
-            }
+            // 清理 session 关联数据
+            cleanupSession(session.getId());
         }
     }
 
@@ -295,7 +209,8 @@ public class ChatHandler {
         }
     }
 
-    private void updateConversationHistory(String conversationId, String userMessage, String response) {
+    private void updateConversationHistory(String conversationId, String userMessage, 
+                                           String response, String thinkingContent) {
         String key = "conversation:" + conversationId;
         List<Map<String, String>> history = getConversationHistory(conversationId);
         
@@ -314,6 +229,16 @@ public class ChatHandler {
         assistantMsgMap.put("role", "assistant");
         assistantMsgMap.put("content", response);
         assistantMsgMap.put("timestamp", currentTimestamp);
+        
+        // 添加思考过程内容（非空时），支持截断逻辑防止 Redis 大 Key
+        if (thinkingContent != null && !thinkingContent.isEmpty()) {
+            int maxLen = aiProperties.getThinking().getMaxPersistLength();
+            if (thinkingContent.length() > maxLen) {
+                thinkingContent = thinkingContent.substring(0, maxLen) + "\n\n[思考过程内容过长，已截断]";
+                logger.warn("思考过程内容超过 {} 字符，已截断", maxLen);
+            }
+            assistantMsgMap.put("thinkingContent", thinkingContent);
+        }
         history.add(assistantMsgMap);
         
         // 限制历史记录长度，保留最近的20条消息
@@ -368,6 +293,46 @@ public class ChatHandler {
         }
     }
 
+    /**
+     * 推送思考过程数据块到前端
+     * 检查 thinking 功能开关和停止标志
+     */
+    void sendThinkingChunk(WebSocketSession session, String chunk) {
+        try {
+            // 检查 thinking 功能是否启用
+            if (!aiProperties.getThinking().isEnabled()) {
+                return;
+            }
+            // 检查停止标志
+            if (Boolean.TRUE.equals(stopFlags.get(session.getId()))) {
+                return;
+            }
+            Map<String, String> chunkResponse = Map.of("type", "thinking", "chunk", chunk);
+            String jsonChunk = objectMapper.writeValueAsString(chunkResponse);
+            session.sendMessage(new TextMessage(jsonChunk));
+        } catch (Exception e) {
+            logger.error("发送思考块失败: {}", e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 推送回答内容数据块到前端
+     * 检查停止标志
+     */
+    void sendAnswerChunk(WebSocketSession session, String chunk) {
+        try {
+            // 检查停止标志
+            if (Boolean.TRUE.equals(stopFlags.get(session.getId()))) {
+                return;
+            }
+            Map<String, String> chunkResponse = Map.of("type", "answer", "chunk", chunk);
+            String jsonChunk = objectMapper.writeValueAsString(chunkResponse);
+            session.sendMessage(new TextMessage(jsonChunk));
+        } catch (Exception e) {
+            logger.error("发送回答块失败: {}", e.getMessage(), e);
+        }
+    }
+
     private void sendCompletionNotification(WebSocketSession session) {
         try {
             long currentTime = System.currentTimeMillis();
@@ -398,6 +363,41 @@ public class ChatHandler {
         } catch (Exception e) {
             logger.error("发送错误消息失败: {}", e.getMessage(), e);
         }
+    }
+
+    /**
+     * 统一清理指定 session 关联的所有临时数据
+     */
+    public void cleanupSession(String sessionId) {
+        responseBuilders.remove(sessionId);
+        thinkingBuilders.remove(sessionId);
+        stopFlags.remove(sessionId);
+        sessionConversationIds.remove(sessionId);
+        sessionUserIds.remove(sessionId);
+        sessionStartTimes.remove(sessionId);
+    }
+
+    /**
+     * 定时清理超过 10 分钟未完成的 stale session 数据，防止内存泄漏
+     * 每 5 分钟执行一次
+     */
+    @Scheduled(fixedRate = 300000)
+    public void cleanupStaleBuilders() {
+        long now = System.currentTimeMillis();
+        sessionStartTimes.entrySet().removeIf(entry -> {
+            if (now - entry.getValue() > 600000) { // 10 分钟
+                String sessionId = entry.getKey();
+                logger.warn("定时清理残留 session 数据: {}", sessionId);
+                // 清理其他 Map（sessionStartTimes 由 removeIf 负责移除，避免重复操作）
+                responseBuilders.remove(sessionId);
+                thinkingBuilders.remove(sessionId);
+                stopFlags.remove(sessionId);
+                sessionConversationIds.remove(sessionId);
+                sessionUserIds.remove(sessionId);
+                return true;
+            }
+            return false;
+        });
     }
 
     /**
