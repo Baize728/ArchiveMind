@@ -32,3 +32,4 @@ target/
 .vscode/
 ./src/main/resources/application.yml
 ./docs
+./.kiro/skills
