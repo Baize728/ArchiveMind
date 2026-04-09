@@ -14,6 +14,7 @@ public class AiProperties {
 
     private Prompt prompt = new Prompt();
     private Generation generation = new Generation();
+    private Rewrite rewrite = new Rewrite();
 
     @Data
     public static class Prompt {
@@ -28,6 +29,26 @@ public class AiProperties {
     }
 
     @Data
+    public static class Rewrite {
+        /** 是否启用 Query Rewriting */
+        private boolean enabled = true;
+        /** 改写用 LLM API 地址 */
+        private String apiUrl;
+        /** 改写用 LLM API Key */
+        private String apiKey;
+        /** 改写用 LLM 模型名称 */
+        private String model;
+        /** 改写 system prompt */
+        private String systemPrompt = "你是一个查询改写助手。根据多轮对话历史，将用户最新的问题改写为一个语义完整、可独立理解的检索查询。"
+                + "要求：1) 补全省略的主语和上下文；2) 保留用户的核心意图；3) 只输出改写后的查询，不要输出任何解释。"
+                + "如果当前问题已经语义完整，直接原样输出即可。";
+        /** 历史对话最大轮数（一轮 = 一问一答） */
+        private int maxHistoryRounds = 3;
+        /** 同步调用超时时间（秒） */
+        private int timeoutSeconds = 15;
+    }
+
+    @Data
     public static class Generation {
         /** 采样温度 */
         private Double temperature = 0.3;
@@ -36,4 +57,4 @@ public class AiProperties {
         /** nucleus top-p */
         private Double topP = 0.9;
     }
-} 
+}

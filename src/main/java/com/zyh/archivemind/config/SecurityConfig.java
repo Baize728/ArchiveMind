@@ -57,6 +57,8 @@ public class SecurityConfig {
                             .requestMatchers("/api/v1/upload/**", "/api/v1/parse", "/api/v1/documents/download", "/api/v1/documents/preview").hasAnyRole("USER", "ADMIN")
                             // 对话历史相关接口 - 用户只能查看自己的历史，管理员可以查看所有
                             .requestMatchers("/api/v1/users/conversation/**").hasAnyRole("USER", "ADMIN")
+                            // 多会话管理接口 - 普通用户和管理员都可访问
+                            .requestMatchers("/api/v1/sessions/**").hasAnyRole("USER", "ADMIN")
                             // 搜索接口 - 普通用户和管理员都可访问
                             .requestMatchers("/api/search/**").hasAnyRole("USER", "ADMIN")
                             // 聊天相关接口 - WebSocket停止Token获取 (允许匿名访问)

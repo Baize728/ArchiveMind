@@ -44,6 +44,9 @@ public class AdminController {
     private RedisTemplate<String, String> redisTemplate;
     
     @Autowired
+    private org.springframework.data.redis.core.StringRedisTemplate stringRedisTemplate;
+    
+    @Autowired
     private ObjectMapper objectMapper;
 
     /**
@@ -452,7 +455,7 @@ public class AdminController {
                 }
             }
             
-            // 获取所有Redis键中以"user:"开头的键
+            // 1. 查询旧键 user:*:current_conversation（向后兼容）
             Set<String> userKeys = redisTemplate.keys("user:*:current_conversation");
             
             if (userKeys != null && !userKeys.isEmpty()) {
@@ -472,6 +475,44 @@ public class AdminController {
                         
                         // 获取对话内容，使用实际的用户名而不是Redis中的ID
                         String conversationKey = "conversation:" + conversationId;
+                        String json = redisTemplate.opsForValue().get(conversationKey);
+                        if (json != null) {
+                            String displayUsername = targetUsername != null ? targetUsername : redisUserId;
+                            processRedisConversation(json, allConversations, displayUsername, start_date, end_date);
+                        }
+                    }
+                }
+            }
+            
+            // 2. 查询新的多会话键 user:*:sessions（Sorted Set）
+            Set<String> sessionKeys = stringRedisTemplate.keys("user:*:sessions");
+            // 收集旧键已处理过的 conversationId，避免重复
+            Set<String> processedIds = new HashSet<>();
+            if (userKeys != null) {
+                for (String userKey : userKeys) {
+                    String cid = redisTemplate.opsForValue().get(userKey);
+                    if (cid != null) processedIds.add(cid);
+                }
+            }
+            
+            if (sessionKeys != null && !sessionKeys.isEmpty()) {
+                for (String sessionsKey : sessionKeys) {
+                    String redisUserId = sessionsKey.replace("user:", "").replace(":sessions", "");
+                    
+                    // 如果指定了userid，只查询该用户的对话
+                    if (userid != null && !userid.isEmpty()) {
+                        if (!redisUserId.equals(userid) && !redisUserId.equals(targetUsername)) {
+                            continue;
+                        }
+                    }
+                    
+                    Set<String> sessionIds = stringRedisTemplate.opsForZSet().reverseRange(sessionsKey, 0, -1);
+                    if (sessionIds == null) continue;
+                    
+                    for (String sessionId : sessionIds) {
+                        if (processedIds.contains(sessionId)) continue; // 跳过旧键已处理的
+                        
+                        String conversationKey = "conversation:" + sessionId;
                         String json = redisTemplate.opsForValue().get(conversationKey);
                         if (json != null) {
                             String displayUsername = targetUsername != null ? targetUsername : redisUserId;

@@ -22,6 +22,12 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * @deprecated 此控制器已被 {@link ConversationSessionController} 取代。
+ * 新的多会话管理接口位于 /api/v1/sessions/**。
+ * 本控制器保留用于向后兼容，将在后续版本中移除。
+ */
+@Deprecated
 @RestController
 @RequestMapping("/api/v1/users/conversation")
 public class ConversationController {

@@ -12,12 +12,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 
+import com.zyh.archivemind.dto.SessionDTO;
+
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -34,6 +35,8 @@ public class ChatHandler {
     private final RedisTemplate<String, String> redisTemplate;
     private final HybridSearchService searchService;
     private final DeepSeekClient deepSeekClient;
+    private final QueryRewriteService queryRewriteService;
+    private final ConversationSessionService conversationSessionService;
     private final ObjectMapper objectMapper;
     
     // 用于存储每个会话的完整响应
@@ -45,10 +48,14 @@ public class ChatHandler {
 
     public ChatHandler(RedisTemplate<String, String> redisTemplate,
                       HybridSearchService searchService,
-                      DeepSeekClient deepSeekClient) {
+                      DeepSeekClient deepSeekClient,
+                      QueryRewriteService queryRewriteService,
+                      ConversationSessionService conversationSessionService) {
         this.redisTemplate = redisTemplate;
         this.searchService = searchService;
         this.deepSeekClient = deepSeekClient;
+        this.queryRewriteService = queryRewriteService;
+        this.conversationSessionService = conversationSessionService;
         this.objectMapper = new ObjectMapper();
     }
 
@@ -69,14 +76,28 @@ public class ChatHandler {
             List<Map<String, String>> history = getConversationHistory(conversationId);
             logger.debug("获取到 {} 条历史对话", history.size());
             
-            // 3. 执行带权限过滤的混合搜索
-            List<SearchResult> searchResults = searchService.searchWithPermission(userMessage, userId, 5);
+            // 2.5 如果是第一条消息，自动生成会话标题
+            if (history.isEmpty()) {
+                try {
+                    conversationSessionService.autoGenerateTitle(conversationId, userMessage);
+                    logger.info("已为会话 {} 自动生成标题", conversationId);
+                } catch (Exception e) {
+                    logger.warn("自动生成标题失败，会话ID: {}, 错误: {}", conversationId, e.getMessage());
+                }
+            }
+            
+            // 3. Query Rewriting：结合对话历史改写当前问题，生成语义完整的检索查询
+            String rewrittenQuery = queryRewriteService.rewrite(userMessage, history);
+            logger.info("检索用查询: {}", rewrittenQuery);
+            
+            // 4. 使用改写后的查询执行带权限过滤的混合搜索
+            List<SearchResult> searchResults = searchService.searchWithPermission(rewrittenQuery, userId, 5);
             logger.debug("搜索结果数量: {}", searchResults.size());
             
-            // 4. 构建上下文
+            // 5. 构建上下文
             String context = buildContext(searchResults);
             
-            // 5. 调用 DeepSeek API 并处理流式响应
+            // 6. 调用 DeepSeek API 并处理流式响应（使用原始用户消息，保持对话自然）
             logger.info("调用DeepSeek API生成回复");
             deepSeekClient.streamResponse(userMessage, context, history, 
                 chunk -> {
@@ -98,7 +119,7 @@ public class ChatHandler {
                     responseFutures.remove(session.getId());
                 });
             
-            // 6. 启动一个后台任务检查并标记响应完成
+            // 7. 启动一个后台任务检查并标记响应完成
             new Thread(() -> {
                 try {
                     // 等待最多30秒，给API足够的响应时间
@@ -127,6 +148,13 @@ public class ChatHandler {
                             // 更新对话历史
                             String completeResponse = responseBuilder.toString();
                             updateConversationHistory(conversationId, userMessage, completeResponse);
+                            
+                            // 刷新会话 TTL
+                            try {
+                                conversationSessionService.refreshSessionTTL(userId, conversationId);
+                            } catch (Exception ttlEx) {
+                                logger.warn("刷新会话TTL失败，用户ID: {}, 会话ID: {}, 错误: {}", userId, conversationId, ttlEx.getMessage());
+                            }
                             
                             // 输出对话存储信息以便调试
                             String redisKey = "user:" + userId + ":current_conversation";
@@ -157,6 +185,13 @@ public class ChatHandler {
                                         String completeResponse = responseBuilder.toString();
                                         updateConversationHistory(conversationId, userMessage, completeResponse);
                                         
+                                        // 刷新会话 TTL
+                                        try {
+                                            conversationSessionService.refreshSessionTTL(userId, conversationId);
+                                        } catch (Exception ttlEx) {
+                                            logger.warn("刷新会话TTL失败，用户ID: {}, 会话ID: {}, 错误: {}", userId, conversationId, ttlEx.getMessage());
+                                        }
+                                        
                                         // 输出对话存储信息以便调试
                                         String redisKey = "user:" + userId + ":current_conversation";
                                         logger.info("对话存储信息 - Redis键: {}, 值: {}", redisKey, conversationId);
@@ -180,6 +215,13 @@ public class ChatHandler {
                                 // 更新对话历史
                                 String completeResponse = responseBuilder.toString();
                                 updateConversationHistory(conversationId, userMessage, completeResponse);
+                                
+                                // 刷新会话 TTL
+                                try {
+                                    conversationSessionService.refreshSessionTTL(userId, conversationId);
+                                } catch (Exception ttlEx) {
+                                    logger.warn("刷新会话TTL失败，用户ID: {}, 会话ID: {}, 错误: {}", userId, conversationId, ttlEx.getMessage());
+                                }
                                 
                                 // 输出对话存储信息以便调试
                                 String redisKey = "user:" + userId + ":current_conversation";
@@ -222,15 +264,14 @@ public class ChatHandler {
     }
 
     private String getOrCreateConversationId(String userId) {
-        String key = "user:" + userId + ":current_conversation";
-        String conversationId = redisTemplate.opsForValue().get(key);
+        String conversationId = conversationSessionService.getActiveSessionId(userId);
         
         if (conversationId == null) {
-            conversationId = UUID.randomUUID().toString();
-            redisTemplate.opsForValue().set(key, conversationId, Duration.ofDays(7));
-            logger.info("为用户 {} 创建新的会话ID: {}", userId, conversationId);
+            SessionDTO newSession = conversationSessionService.createSession(userId);
+            conversationId = newSession.getSessionId();
+            logger.info("为用户 {} 自动创建新会话: {}", userId, conversationId);
         } else {
-            logger.info("获取到用户 {} 的现有会话ID: {}", userId, conversationId);
+            logger.info("获取到用户 {} 的活跃会话ID: {}", userId, conversationId);
         }
         
         return conversationId;
@@ -295,7 +336,7 @@ public class ChatHandler {
             return "";
         }
 
-        final int MAX_SNIPPET_LEN = 300; // 单段最长字符数，超出截断
+        final int MAX_SNIPPET_LEN = 800; // 单段最长字符数，超出截断
         StringBuilder context = new StringBuilder();
         for (int i = 0; i < searchResults.size(); i++) {
             SearchResult result = searchResults.get(i);
