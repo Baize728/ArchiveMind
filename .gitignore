@@ -33,3 +33,6 @@ target/
 ./src/main/resources/application.yml
 ./docs
 ./.kiro/skills
+
+.kiro/specs/
+docs/面试准备-多LLM抽象层.md
