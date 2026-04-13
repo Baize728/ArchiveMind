@@ -6,6 +6,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
+import org.springframework.web.socket.handler.ConcurrentWebSocketSessionDecorator;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zyh.archivemind.service.ChatHandler;
@@ -33,7 +34,10 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
     @Override
     public void afterConnectionEstablished(WebSocketSession session) {
         String userId = extractUserId(session);
-        sessions.put(userId, session);
+        // 使用 ConcurrentWebSocketSessionDecorator 包装，确保并发安全
+        // 参数：sendTimeLimit=5000ms, bufferSizeLimit=65536 bytes
+        WebSocketSession concurrentSession = new ConcurrentWebSocketSessionDecorator(session, 5000, 65536);
+        sessions.put(userId, concurrentSession);
         logger.info("WebSocket连接已建立，用户ID: {}，会话ID: {}，URI路径: {}", 
                     userId, session.getId(), session.getUri().getPath());
     }
@@ -41,6 +45,8 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
     @Override
     protected void handleTextMessage(WebSocketSession session, TextMessage message) {
         String userId = extractUserId(session);
+        // 使用 sessions map 中的包装后 session（ConcurrentWebSocketSessionDecorator），确保并发安全
+        WebSocketSession wrappedSession = sessions.getOrDefault(userId, session);
         try {
             String payload = message.getPayload();
             logger.info("接收到消息，用户ID: {}，会话ID: {}，消息长度: {}", 
@@ -57,7 +63,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                     if ("stop".equals(messageType) && INTERNAL_CMD_TOKEN.equals(internalToken)) {
                         // 处理停止指令
                         logger.info("收到有效的停止按钮指令，用户ID: {}，会话ID: {}", userId, session.getId());
-                        chatHandler.stopResponse(userId, session);
+                        chatHandler.stopResponse(userId, wrappedSession);
                         return;
                     }
                     
@@ -69,19 +75,21 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 }
             }
             
-            // 普通聊天消息处理（保持向下兼容）
-            chatHandler.processMessage(userId, payload, session);
+            // 普通聊天消息处理（保持向下兼容），使用包装后的 session 确保并发安全
+            chatHandler.processMessage(userId, payload, wrappedSession);
             
         } catch (Exception e) {
             logger.error("处理消息出错，用户ID: {}，会话ID: {}，错误: {}", 
                         userId, session.getId(), e.getMessage(), e);
-            sendErrorMessage(session, "消息处理失败：" + e.getMessage());
+            sendErrorMessage(wrappedSession, "消息处理失败：" + e.getMessage());
         }
     }
 
     @Override
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
         String userId = extractUserId(session);
+        // 清理可能残留的 builder 数据（防止内存泄漏）
+        chatHandler.cleanupSession(session.getId());
         sessions.remove(userId);
         logger.info("WebSocket连接已关闭，用户ID: {}，会话ID: {}，状态: {}", 
                     userId, session.getId(), status);
