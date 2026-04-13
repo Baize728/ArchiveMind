@@ -181,11 +181,18 @@ declare namespace Api {
       conversationId: string;
     }
 
+    interface ToolCallStatus {
+      function: string;
+      status: 'executing' | 'done';
+    }
+
     interface Message {
       role: 'user' | 'assistant';
       content: string;
       status?: 'pending' | 'loading' | 'finished' | 'error';
       timestamp?: string;
+      /** 工具调用状态列表（Agent 模式下 LLM 调用工具时填充） */
+      toolCalls?: ToolCallStatus[];
     }
 
     interface Token {
@@ -213,6 +220,24 @@ declare namespace Api {
       week: Session[];
       month: Session[];
       earlier: Record<string, Session[]>;
+    }
+  }
+
+  namespace Llm {
+    interface Provider {
+      id: string;
+      supportsToolCalling: boolean;
+      current: boolean;
+    }
+
+    interface ProvidersResponse {
+      currentProvider: string;
+      providers: Provider[];
+    }
+
+    interface PreferenceResponse {
+      message: string;
+      currentProvider: string;
     }
   }
 
