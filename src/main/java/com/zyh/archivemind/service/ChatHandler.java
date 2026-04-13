@@ -5,11 +5,13 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zyh.archivemind.Llm.*;
 import com.zyh.archivemind.Llm.UserLlmPreferenceService;
+import com.zyh.archivemind.config.AiProperties;
 import com.zyh.archivemind.dto.SessionDTO;
 import com.zyh.archivemind.entity.SearchResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
@@ -42,11 +44,14 @@ public class ChatHandler {
     private final LlmRouter llmRouter;
     private final ToolCallParser toolCallParser;
     private final UserLlmPreferenceService preferenceService;
+    private final AiProperties aiProperties;
     private final ObjectMapper objectMapper;
 
     private final Map<String, StringBuilder> responseBuilders = new ConcurrentHashMap<>();
+    private final Map<String, StringBuilder> thinkingBuilders = new ConcurrentHashMap<>();
     private final Map<String, CompletableFuture<String>> responseFutures = new ConcurrentHashMap<>();
     private final Map<String, Boolean> stopFlags = new ConcurrentHashMap<>();
+    private final Map<String, Long> sessionStartTimes = new ConcurrentHashMap<>();
     /** 用于执行阻塞工具调用，避免占用 Reactor IO 线程 */
     private final ScheduledExecutorService toolExecutor =
             Executors.newScheduledThreadPool(4, r -> new Thread(r, "tool-executor"));
@@ -56,13 +61,15 @@ public class ChatHandler {
                        ConversationSessionService conversationSessionService,
                        LlmRouter llmRouter,
                        ToolCallParser toolCallParser,
-                       UserLlmPreferenceService preferenceService) {
+                       UserLlmPreferenceService preferenceService,
+                       AiProperties aiProperties) {
         this.redisTemplate = redisTemplate;
         this.searchService = searchService;
         this.conversationSessionService = conversationSessionService;
         this.llmRouter = llmRouter;
         this.toolCallParser = toolCallParser;
         this.preferenceService = preferenceService;
+        this.aiProperties = aiProperties;
         this.objectMapper = new ObjectMapper();
     }
 
@@ -71,6 +78,8 @@ public class ChatHandler {
         try {
             String conversationId = getOrCreateConversationId(userId);
             responseBuilders.put(session.getId(), new StringBuilder());
+            thinkingBuilders.put(session.getId(), new StringBuilder());
+            sessionStartTimes.put(session.getId(), System.currentTimeMillis());
             CompletableFuture<String> responseFuture = new CompletableFuture<>();
             responseFutures.put(session.getId(), responseFuture);
 
@@ -96,7 +105,7 @@ public class ChatHandler {
         } catch (Exception e) {
             logger.error("处理消息错误: {}", e.getMessage(), e);
             handleError(session, e);
-            responseBuilders.remove(session.getId());
+            cleanupSession(session.getId());
             CompletableFuture<String> future = responseFutures.remove(session.getId());
             if (future != null && !future.isDone()) future.completeExceptionally(e);
         }
@@ -126,11 +135,19 @@ public class ChatHandler {
 
         provider.streamChat(request, new LlmStreamCallback() {
             @Override
+            public void onThinkingChunk(String chunk) {
+                if (Boolean.TRUE.equals(stopFlags.get(session.getId()))) return;
+                StringBuilder builder = thinkingBuilders.get(session.getId());
+                if (builder != null) builder.append(chunk);
+                sendThinkingChunk(session, chunk);
+            }
+
+            @Override
             public void onTextChunk(String chunk) {
                 if (Boolean.TRUE.equals(stopFlags.get(session.getId()))) return;
                 StringBuilder builder = responseBuilders.get(session.getId());
                 if (builder != null) builder.append(chunk);
-                sendResponseChunk(session, chunk);
+                sendAnswerChunk(session, chunk);
             }
 
             @Override
@@ -169,7 +186,7 @@ public class ChatHandler {
             public void onError(Throwable error) {
                 handleError(session, error);
                 responseFuture.completeExceptionally(error);
-                responseBuilders.remove(session.getId());
+                cleanupSession(session.getId());
                 responseFutures.remove(session.getId());
             }
         });
@@ -281,12 +298,14 @@ public class ChatHandler {
     private void finishResponse(WebSocketSession session, String conversationId,
                                 String userId, String userMessage,
                                 CompletableFuture<String> responseFuture) {
-        StringBuilder builder = responseBuilders.remove(session.getId());
-        responseFutures.remove(session.getId());
+        StringBuilder builder = responseBuilders.get(session.getId());
+        StringBuilder thinkingBuilder = thinkingBuilders.get(session.getId());
 
         String completeResponse = builder != null ? builder.toString() : "";
+        String thinkingContent = thinkingBuilder != null ? thinkingBuilder.toString() : "";
+
         if (!completeResponse.isEmpty()) {
-            updateConversationHistory(conversationId, userMessage, completeResponse);
+            updateConversationHistory(conversationId, userMessage, completeResponse, thinkingContent);
         }
 
         try {
@@ -296,6 +315,8 @@ public class ChatHandler {
         }
 
         sendCompletionNotification(session);
+        cleanupSession(session.getId());
+        responseFutures.remove(session.getId());
         responseFuture.complete(completeResponse);
         logger.info("消息处理完成，用户ID: {}", userId);
     }
@@ -324,7 +345,8 @@ public class ChatHandler {
         }
     }
 
-    private void updateConversationHistory(String conversationId, String userMessage, String response) {
+    private void updateConversationHistory(String conversationId, String userMessage,
+                                           String response, String thinkingContent) {
         String key = "conversation:" + conversationId;
         List<Map<String, String>> history = getConversationHistory(conversationId);
         String ts = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss"));
@@ -339,6 +361,15 @@ public class ChatHandler {
         assistantMsg.put("role", "assistant");
         assistantMsg.put("content", response);
         assistantMsg.put("timestamp", ts);
+
+        if (thinkingContent != null && !thinkingContent.isEmpty()) {
+            int maxLen = aiProperties.getThinking().getMaxPersistLength();
+            if (thinkingContent.length() > maxLen) {
+                thinkingContent = thinkingContent.substring(0, maxLen) + "\n\n[思考过程内容过长，已截断]";
+                logger.warn("思考过程内容超过 {} 字符，已截断", maxLen);
+            }
+            assistantMsg.put("thinkingContent", thinkingContent);
+        }
         history.add(assistantMsg);
 
         if (history.size() > 20) history = history.subList(history.size() - 20, history.size());
@@ -350,12 +381,24 @@ public class ChatHandler {
         }
     }
 
-    private void sendResponseChunk(WebSocketSession session, String chunk) {
+    private void sendThinkingChunk(WebSocketSession session, String chunk) {
         try {
-            String json = objectMapper.writeValueAsString(Map.of("chunk", chunk));
+            if (!aiProperties.getThinking().isEnabled()) return;
+            if (Boolean.TRUE.equals(stopFlags.get(session.getId()))) return;
+            String json = objectMapper.writeValueAsString(Map.of("type", "thinking", "chunk", chunk));
             session.sendMessage(new TextMessage(json));
         } catch (Exception e) {
-            logger.error("发送响应块失败: {}", e.getMessage(), e);
+            logger.error("发送思考块失败: {}", e.getMessage(), e);
+        }
+    }
+
+    private void sendAnswerChunk(WebSocketSession session, String chunk) {
+        try {
+            if (Boolean.TRUE.equals(stopFlags.get(session.getId()))) return;
+            String json = objectMapper.writeValueAsString(Map.of("type", "answer", "chunk", chunk));
+            session.sendMessage(new TextMessage(json));
+        } catch (Exception e) {
+            logger.error("发送回答块失败: {}", e.getMessage(), e);
         }
     }
 
@@ -394,6 +437,35 @@ public class ChatHandler {
         } catch (Exception e) {
             logger.error("发送错误消息失败: {}", e.getMessage(), e);
         }
+    }
+
+    /**
+     * 统一清理指定 session 关联的所有临时数据
+     */
+    public void cleanupSession(String sessionId) {
+        responseBuilders.remove(sessionId);
+        thinkingBuilders.remove(sessionId);
+        stopFlags.remove(sessionId);
+        sessionStartTimes.remove(sessionId);
+    }
+
+    /**
+     * 定时清理超过 10 分钟未完成的 stale session 数据，防止内存泄漏
+     */
+    @Scheduled(fixedRate = 300000)
+    public void cleanupStaleBuilders() {
+        long now = System.currentTimeMillis();
+        sessionStartTimes.entrySet().removeIf(entry -> {
+            if (now - entry.getValue() > 600000) {
+                String sessionId = entry.getKey();
+                logger.warn("定时清理残留 session 数据: {}", sessionId);
+                responseBuilders.remove(sessionId);
+                thinkingBuilders.remove(sessionId);
+                stopFlags.remove(sessionId);
+                return true;
+            }
+            return false;
+        });
     }
 
     public void stopResponse(String userId, WebSocketSession session) {

@@ -13,6 +13,14 @@ public interface LlmStreamCallback {
     void onTextChunk(String chunk);
 
     /**
+     * 收到思考过程内容时回调（如 DeepSeek R1 的 reasoning_content）
+     * @param chunk 思考过程片段
+     */
+    default void onThinkingChunk(String chunk) {
+        // 默认空实现，不强制所有调用方实现
+    }
+
+    /**
      * 收到工具调用指令时回调
      * @param toolCall 工具调用信息（包含函数名和参数）
      */

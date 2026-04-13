@@ -2,6 +2,7 @@ package com.zyh.archivemind.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zyh.archivemind.Llm.*;
+import com.zyh.archivemind.config.AiProperties;
 import com.zyh.archivemind.dto.SessionDTO;
 import net.jqwik.api.*;
 import net.jqwik.api.constraints.AlphaChars;
@@ -71,7 +72,7 @@ class ChatHandlerPropertyTest {
 
         ChatHandler chatHandler = new ChatHandler(
                 redisTemplate, searchService, conversationSessionService,
-                llmRouter, toolCallParser, preferenceService);
+                llmRouter, toolCallParser, preferenceService, new AiProperties());
 
         // Act
         chatHandler.processMessage(userId, messageContent, wsSession);
@@ -139,7 +140,7 @@ class ChatHandlerPropertyTest {
 
         ChatHandler chatHandler = new ChatHandler(
                 redisTemplate, searchService, conversationSessionService,
-                llmRouter, toolCallParser, preferenceService);
+                llmRouter, toolCallParser, preferenceService, new AiProperties());
 
         // Act
         chatHandler.processMessage(userId, messageContent, wsSession);

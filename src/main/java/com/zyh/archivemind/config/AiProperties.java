@@ -14,6 +14,7 @@ import org.springframework.stereotype.Component;
 public class AiProperties {
 
     private Rewrite rewrite = new Rewrite();
+    private Thinking thinking = new Thinking();
 
     @Data
     public static class Rewrite {
@@ -33,5 +34,13 @@ public class AiProperties {
         private int maxHistoryRounds = 3;
         /** 同步调用超时时间（秒） */
         private int timeoutSeconds = 15;
+    }
+
+    @Data
+    public static class Thinking {
+        /** 是否推送思考过程到前端 */
+        private boolean enabled = true;
+        /** thinkingContent 持久化最大字符数，超出截断 */
+        private int maxPersistLength = 20000;
     }
 }

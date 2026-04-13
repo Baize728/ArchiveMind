@@ -148,6 +148,12 @@ public abstract class AbstractOpenAiCompatibleProvider implements LlmProvider {
             JsonNode node = objectMapper.readTree(chunk);
             JsonNode delta = node.path("choices").path(0).path("delta");
 
+            // 提取思考过程内容（DeepSeek R1 模型特有字段）
+            String reasoningContent = delta.path("reasoning_content").asText("");
+            if (!reasoningContent.isEmpty()) {
+                callback.onThinkingChunk(reasoningContent);
+            }
+
             String content = delta.path("content").asText("");
             if (!content.isEmpty()) {
                 callback.onTextChunk(content);

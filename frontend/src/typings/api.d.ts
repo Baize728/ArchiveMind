@@ -189,6 +189,7 @@ declare namespace Api {
     interface Message {
       role: 'user' | 'assistant';
       content: string;
+      thinkingContent?: string;
       status?: 'pending' | 'loading' | 'finished' | 'error';
       timestamp?: string;
       /** 工具调用状态列表（Agent 模式下 LLM 调用工具时填充） */

@@ -2,6 +2,7 @@ package com.zyh.archivemind.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zyh.archivemind.Llm.*;
+import com.zyh.archivemind.config.AiProperties;
 import com.zyh.archivemind.dto.SessionDTO;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -40,7 +41,7 @@ class ChatHandlerTest {
     void setUp() {
         chatHandler = new ChatHandler(
                 redisTemplate, searchService, conversationSessionService,
-                llmRouter, toolCallParser, preferenceService);
+                llmRouter, toolCallParser, preferenceService, new AiProperties());
         lenient().when(redisTemplate.opsForValue()).thenReturn(valueOperations);
         lenient().when(session.getId()).thenReturn("test-session-id");
         lenient().when(preferenceService.getProviderForUser(anyString())).thenReturn(llmProvider);
