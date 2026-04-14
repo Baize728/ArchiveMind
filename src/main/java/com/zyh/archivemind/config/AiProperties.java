@@ -13,6 +13,7 @@ import org.springframework.stereotype.Component;
 @Data
 public class AiProperties {
 
+    private Prompt prompt = new Prompt();
     private Rewrite rewrite = new Rewrite();
     private Thinking thinking = new Thinking();
 
@@ -34,6 +35,23 @@ public class AiProperties {
         private int maxHistoryRounds = 3;
         /** 同步调用超时时间（秒） */
         private int timeoutSeconds = 15;
+    }
+
+    @Data
+    public static class Prompt {
+        /** System prompt 规则 */
+        private String rules = "你是ArchiveMind知识助手，须遵守：\n"
+                + "1. 仅用简体中文作答。\n"
+                + "2. 回答需先给结论，再给论据。\n"
+                + "3. 如引用参考信息，请在句末加 (来源#编号: 文件名)。\n"
+                + "4. 若无足够信息，请回答\"暂无相关信息\"并说明原因。\n"
+                + "5. 当问题需要查阅资料时，请主动调用可用的工具。";
+        /** 参考资料起始标记 */
+        private String refStart = "<<REF>>";
+        /** 参考资料结束标记 */
+        private String refEnd = "<<END>>";
+        /** 无检索结果时的提示文本 */
+        private String noResultText = "（本轮无检索结果）";
     }
 
     @Data

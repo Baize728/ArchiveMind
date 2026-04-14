@@ -170,15 +170,8 @@ public class ChatHandler {
     private List<LlmMessage> buildLlmMessages(String userMessage, List<Map<String, String>> history) {
         List<LlmMessage> messages = new ArrayList<>();
 
-        // system prompt：告知 LLM 行为规则（可用工具由 AgentExecutor 通过 ToolDefinition 注入）
-        messages.add(LlmMessage.system(
-                "你是ArchiveMind知识助手，须遵守：\n" +
-                "1. 仅用简体中文作答。\n" +
-                "2. 回答需先给结论，再给论据。\n" +
-                "3. 如引用参考信息，请在句末加 (来源#编号: 文件名)。\n" +
-                "4. 若无足够信息，请回答\"暂无相关信息\"并说明原因。\n" +
-                "5. 当问题需要查阅资料时，请主动调用可用的工具。"
-        ));
+        // system prompt：从配置读取规则（可用工具由 AgentExecutor 通过 ToolDefinition 注入）
+        messages.add(LlmMessage.system(aiProperties.getPrompt().getRules()));
 
         // 历史消息
         for (Map<String, String> msg : history) {
