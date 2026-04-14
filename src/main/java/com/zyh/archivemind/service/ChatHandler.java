@@ -5,9 +5,14 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zyh.archivemind.Llm.*;
 import com.zyh.archivemind.Llm.UserLlmPreferenceService;
+import com.zyh.archivemind.agent.AgentCallback;
+import com.zyh.archivemind.agent.AgentConfig;
+import com.zyh.archivemind.agent.AgentContext;
+import com.zyh.archivemind.agent.AgentExecutor;
 import com.zyh.archivemind.config.AiProperties;
 import com.zyh.archivemind.dto.SessionDTO;
-import com.zyh.archivemind.entity.SearchResult;
+import com.zyh.archivemind.skill.SkillContext;
+import com.zyh.archivemind.skill.SkillResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -22,28 +27,21 @@ import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 /**
  * 聊天处理服务
- * Phase 1 改造：接入 LlmRouter + 工具调用循环（Agent 模式）
+ * Phase 2 改造：Agent 循环委托给 AgentExecutor，ChatHandler 只负责 WebSocket 通信 + 会话管理
  */
 @Service
 public class ChatHandler {
 
     private static final Logger logger = LoggerFactory.getLogger(ChatHandler.class);
-    private static final int MAX_TOOL_ITERATIONS = 5;
-    /** knowledge_search 工具定义，无状态，构建一次复用 */
-    private static final List<ToolDefinition> TOOL_DEFINITIONS = buildToolDefinitions();
 
     private final RedisTemplate<String, String> redisTemplate;
-    private final HybridSearchService searchService;
     private final ConversationSessionService conversationSessionService;
-    private final LlmRouter llmRouter;
-    private final ToolCallParser toolCallParser;
     private final UserLlmPreferenceService preferenceService;
+    private final AgentExecutor agentExecutor;
     private final AiProperties aiProperties;
     private final ObjectMapper objectMapper;
 
@@ -52,23 +50,20 @@ public class ChatHandler {
     private final Map<String, CompletableFuture<String>> responseFutures = new ConcurrentHashMap<>();
     private final Map<String, Boolean> stopFlags = new ConcurrentHashMap<>();
     private final Map<String, Long> sessionStartTimes = new ConcurrentHashMap<>();
-    /** 用于执行阻塞工具调用，避免占用 Reactor IO 线程 */
-    private final ScheduledExecutorService toolExecutor =
-            Executors.newScheduledThreadPool(4, r -> new Thread(r, "tool-executor"));
+    /** 用于延迟清理 stopFlag */
+    private final java.util.concurrent.ScheduledExecutorService toolCleanupExecutor =
+            java.util.concurrent.Executors.newSingleThreadScheduledExecutor(
+                    r -> new Thread(r, "stop-flag-cleanup"));
 
     public ChatHandler(RedisTemplate<String, String> redisTemplate,
-                       HybridSearchService searchService,
                        ConversationSessionService conversationSessionService,
-                       LlmRouter llmRouter,
-                       ToolCallParser toolCallParser,
                        UserLlmPreferenceService preferenceService,
+                       AgentExecutor agentExecutor,
                        AiProperties aiProperties) {
         this.redisTemplate = redisTemplate;
-        this.searchService = searchService;
         this.conversationSessionService = conversationSessionService;
-        this.llmRouter = llmRouter;
-        this.toolCallParser = toolCallParser;
         this.preferenceService = preferenceService;
+        this.agentExecutor = agentExecutor;
         this.aiProperties = aiProperties;
         this.objectMapper = new ObjectMapper();
     }
@@ -96,11 +91,68 @@ public class ChatHandler {
             // 构建 LlmMessage 列表（system prompt + 历史 + 当前问题）
             List<LlmMessage> messages = buildLlmMessages(userMessage, history);
 
-            // 构建工具定义
-            List<ToolDefinition> tools = TOOL_DEFINITIONS;
+            // 获取用户偏好的 LLM Provider
+            LlmProvider provider = preferenceService.getProviderForUser(userId);
 
-            // 启动 Agent 循环
-            executeAgentLoop(userId, userMessage, messages, tools, session, conversationId, responseFuture, 0);
+            // 构建 Agent 配置
+            AgentConfig config = AgentConfig.builder()
+                    .maxIterations(5)
+                    .build();
+
+            // 构建 Agent 上下文
+            SkillContext skillContext = SkillContext.builder()
+                    .userId(userId)
+                    .sessionId(session.getId())
+                    .conversationId(conversationId)
+                    .build();
+
+            AgentContext agentContext = AgentContext.builder()
+                    .skillContext(skillContext)
+                    .messages(messages)
+                    .build();
+
+            // 执行 Agent，通过回调桥接 WebSocket
+            agentExecutor.execute(provider, config, agentContext, new AgentCallback() {
+                @Override
+                public void onThinkingChunk(String chunk) {
+                    if (Boolean.TRUE.equals(stopFlags.get(session.getId()))) return;
+                    StringBuilder builder = thinkingBuilders.get(session.getId());
+                    if (builder != null) builder.append(chunk);
+                    sendThinkingChunk(session, chunk);
+                }
+
+                @Override
+                public void onTextChunk(String chunk) {
+                    if (Boolean.TRUE.equals(stopFlags.get(session.getId()))) return;
+                    StringBuilder builder = responseBuilders.get(session.getId());
+                    if (builder != null) builder.append(chunk);
+                    sendAnswerChunk(session, chunk);
+                }
+
+                @Override
+                public void onToolCallStart(ToolCall toolCall) {
+                    sendToolCallNotification(session, toolCall, "executing");
+                }
+
+                @Override
+                public void onToolCallEnd(ToolCall toolCall, SkillResult result) {
+                    sendToolCallNotification(session, toolCall,
+                            result.isSuccess() ? "done" : "failed");
+                }
+
+                @Override
+                public void onComplete() {
+                    finishResponse(session, conversationId, userId, userMessage, responseFuture);
+                }
+
+                @Override
+                public void onError(Throwable error) {
+                    handleError(session, error);
+                    responseFuture.completeExceptionally(error);
+                    cleanupSession(session.getId());
+                    responseFutures.remove(session.getId());
+                }
+            });
 
         } catch (Exception e) {
             logger.error("处理消息错误: {}", e.getMessage(), e);
@@ -112,128 +164,20 @@ public class ChatHandler {
     }
 
     /**
-     * Agent 循环：调用 LLM → 判断响应类型 → 执行工具或输出文本
-     */
-    private void executeAgentLoop(String userId, String userMessage,
-                                  List<LlmMessage> messages, List<ToolDefinition> tools,
-                                  WebSocketSession session, String conversationId,
-                                  CompletableFuture<String> responseFuture, int iteration) {
-        if (iteration >= MAX_TOOL_ITERATIONS) {
-            logger.warn("工具调用循环达到上限 {}，强制结束", MAX_TOOL_ITERATIONS);
-            finishResponse(session, conversationId, userId, userMessage, responseFuture);
-            return;
-        }
-
-        LlmProvider provider = preferenceService.getProviderForUser(userId);
-        LlmRequest request = LlmRequest.builder()
-                .messages(messages)
-                .tools(provider.supportsToolCalling() ? tools : null)
-                .build();
-
-        // 用于标记本轮是否触发了工具调用（触发后由下一轮负责 onComplete 的收尾）
-        final boolean[] toolCalled = {false};
-
-        provider.streamChat(request, new LlmStreamCallback() {
-            @Override
-            public void onThinkingChunk(String chunk) {
-                if (Boolean.TRUE.equals(stopFlags.get(session.getId()))) return;
-                StringBuilder builder = thinkingBuilders.get(session.getId());
-                if (builder != null) builder.append(chunk);
-                sendThinkingChunk(session, chunk);
-            }
-
-            @Override
-            public void onTextChunk(String chunk) {
-                if (Boolean.TRUE.equals(stopFlags.get(session.getId()))) return;
-                StringBuilder builder = responseBuilders.get(session.getId());
-                if (builder != null) builder.append(chunk);
-                sendAnswerChunk(session, chunk);
-            }
-
-            @Override
-            public void onToolCall(ToolCall toolCall) {
-                toolCalled[0] = true;
-                logger.info("LLM 请求调用工具: {}, 参数: {}", toolCall.getFunctionName(), toolCall.getArguments());
-                sendToolCallNotification(session, toolCall, "executing");
-
-                // 切换到独立线程串行执行，避免：
-                // 1. 阻塞 Reactor IO 线程
-                // 2. 多个工具调用并发修改 messages 列表
-                CompletableFuture.runAsync(() -> {
-                    String toolResult = executeToolCall(userId, toolCall);
-                    sendToolCallNotification(session, toolCall, "done");
-                    messages.add(LlmMessage.builder().role("assistant").toolCall(toolCall).build());
-                    messages.add(LlmMessage.toolResult(toolCall.getId(), toolResult));
-                    executeAgentLoop(userId, userMessage, messages, tools, session,
-                            conversationId, responseFuture, iteration + 1);
-                }, toolExecutor).exceptionally(ex -> {
-                    logger.error("工具调用异步执行失败: {}", ex.getMessage(), ex);
-                    handleError(session, ex);
-                    responseFuture.completeExceptionally(ex);
-                    return null;
-                });
-            }
-
-            @Override
-            public void onComplete() {
-                // 只有没有触发工具调用时，才在这里收尾（文本直接回答的情况）
-                if (!toolCalled[0]) {
-                    finishResponse(session, conversationId, userId, userMessage, responseFuture);
-                }
-            }
-
-            @Override
-            public void onError(Throwable error) {
-                handleError(session, error);
-                responseFuture.completeExceptionally(error);
-                cleanupSession(session.getId());
-                responseFutures.remove(session.getId());
-            }
-        });
-    }
-
-    /**
-     * 执行工具调用（Phase 1 内置 knowledge_search）
-     */
-    private String executeToolCall(String userId, ToolCall toolCall) {
-        try {
-            Map<String, Object> args = toolCallParser.parseArguments(toolCall);
-
-            if ("knowledge_search".equals(toolCall.getFunctionName())) {
-                String query = (String) args.getOrDefault("query", "");
-                logger.info("执行知识库搜索，query: {}", query);
-                List<SearchResult> results = searchService.searchWithPermission(query, userId, 5);
-                return toolCallParser.serializeResult(formatSearchResults(results));
-            }
-
-            logger.warn("未知工具: {}", toolCall.getFunctionName());
-            return objectMapper.writeValueAsString(Map.of("error", "未知工具: " + toolCall.getFunctionName()));
-        } catch (Exception e) {
-            logger.error("工具执行失败: {}", e.getMessage(), e);
-            try {
-                return objectMapper.writeValueAsString(Map.of("error", "工具执行失败: " + e.getMessage()));
-            } catch (Exception ex) {
-                return "{\"error\":\"工具执行失败\"}";
-            }
-        }
-    }
-
-    /**
      * 构建 LlmMessage 列表
      * system prompt 内嵌规则，历史消息转换为 LlmMessage，最后追加当前用户问题
      */
     private List<LlmMessage> buildLlmMessages(String userMessage, List<Map<String, String>> history) {
         List<LlmMessage> messages = new ArrayList<>();
 
-        // system prompt：告知 LLM 可用工具及行为规则
+        // system prompt：告知 LLM 行为规则（可用工具由 AgentExecutor 通过 ToolDefinition 注入）
         messages.add(LlmMessage.system(
                 "你是ArchiveMind知识助手，须遵守：\n" +
                 "1. 仅用简体中文作答。\n" +
                 "2. 回答需先给结论，再给论据。\n" +
                 "3. 如引用参考信息，请在句末加 (来源#编号: 文件名)。\n" +
                 "4. 若无足够信息，请回答\"暂无相关信息\"并说明原因。\n" +
-                "5. 你有一个工具 knowledge_search，可以搜索用户的知识库。" +
-                "当问题需要查阅资料时，请主动调用该工具。"
+                "5. 当问题需要查阅资料时，请主动调用可用的工具。"
         ));
 
         // 历史消息
@@ -250,46 +194,6 @@ public class ChatHandler {
         // 当前用户问题
         messages.add(LlmMessage.user(userMessage));
         return messages;
-    }
-
-    /**
-     * 构建工具定义列表（Phase 1 内置 knowledge_search）
-     * 静态方法，结果缓存为常量复用
-     */
-    private static List<ToolDefinition> buildToolDefinitions() {
-        Map<String, Object> parameters = new LinkedHashMap<>();
-        parameters.put("type", "object");
-        parameters.put("properties", Map.of(
-                "query", Map.of(
-                        "type", "string",
-                        "description", "搜索关键词或问题"
-                )
-        ));
-        parameters.put("required", List.of("query"));
-
-        return List.of(ToolDefinition.builder()
-                .name("knowledge_search")
-                .description("搜索用户的私有知识库，返回相关文档片段。当需要查阅资料、回答具体问题时调用。")
-                .parameters(parameters)
-                .build());
-    }
-
-    /**
-     * 将搜索结果格式化为结构化列表
-     */
-    private List<Map<String, String>> formatSearchResults(List<SearchResult> results) {
-        List<Map<String, String>> formatted = new ArrayList<>();
-        for (int i = 0; i < results.size(); i++) {
-            SearchResult r = results.get(i);
-            String snippet = r.getTextContent();
-            if (snippet.length() > 800) snippet = snippet.substring(0, 800) + "…";
-            Map<String, String> item = new LinkedHashMap<>();
-            item.put("index", String.valueOf(i + 1));
-            item.put("file", r.getFileName() != null ? r.getFileName() : "unknown");
-            item.put("content", snippet);
-            formatted.add(item);
-        }
-        return formatted;
     }
 
     /**
@@ -481,6 +385,6 @@ public class ChatHandler {
         } catch (Exception e) {
             logger.error("发送停止确认失败: {}", e.getMessage(), e);
         }
-        toolExecutor.schedule(() -> stopFlags.remove(sessionId), 2, TimeUnit.SECONDS);
+        toolCleanupExecutor.schedule(() -> stopFlags.remove(sessionId), 2, TimeUnit.SECONDS);
     }
 }

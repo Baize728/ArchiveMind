@@ -37,12 +37,15 @@ public class EsIndexInitializer implements CommandLineRunner {
                 logger.error("Elasticsearch连接已关闭，等待5秒后重试...");
                 try {
                     Thread.sleep(5000); // 等待5秒后重试
-                    // 重新尝试初始化索引
                     initializeIndex();
                 } catch (Exception retryException) {
                     logger.error("重试初始化索引失败，请检查Elasticsearch连接配置，比如说是否开启了 HTTPS 模式: {}", retryException.getMessage());
                     throw new RuntimeException("初始化索引失败，重试也未能成功", retryException);
                 }
+            } else if (exception.getCause() instanceof java.net.ConnectException) {
+                // Elasticsearch 未启动时不阻止应用启动，只打警告
+                logger.warn("Elasticsearch 连接失败（{}），搜索功能将不可用。请启动 Elasticsearch 后重启应用。",
+                        exception.getCause().getMessage());
             } else {
                 throw new RuntimeException("初始化索引失败", exception);
             }
