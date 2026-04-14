@@ -42,6 +42,7 @@ public class ChatHandler {
     private final ConversationSessionService conversationSessionService;
     private final UserLlmPreferenceService preferenceService;
     private final AgentExecutor agentExecutor;
+    private final com.zyh.archivemind.agent.orchestrator.OrchestratorAgent orchestratorAgent;
     private final AiProperties aiProperties;
     private final ObjectMapper objectMapper;
 
@@ -59,11 +60,13 @@ public class ChatHandler {
                        ConversationSessionService conversationSessionService,
                        UserLlmPreferenceService preferenceService,
                        AgentExecutor agentExecutor,
+                       com.zyh.archivemind.agent.orchestrator.OrchestratorAgent orchestratorAgent,
                        AiProperties aiProperties) {
         this.redisTemplate = redisTemplate;
         this.conversationSessionService = conversationSessionService;
         this.preferenceService = preferenceService;
         this.agentExecutor = agentExecutor;
+        this.orchestratorAgent = orchestratorAgent;
         this.aiProperties = aiProperties;
         this.objectMapper = new ObjectMapper();
     }
@@ -112,7 +115,7 @@ public class ChatHandler {
                     .build();
 
             // 执行 Agent，通过回调桥接 WebSocket
-            agentExecutor.execute(provider, config, agentContext, new AgentCallback() {
+            AgentCallback agentCallback = new AgentCallback() {
                 @Override
                 public void onThinkingChunk(String chunk) {
                     if (Boolean.TRUE.equals(stopFlags.get(session.getId()))) return;
@@ -152,7 +155,14 @@ public class ChatHandler {
                     cleanupSession(session.getId());
                     responseFutures.remove(session.getId());
                 }
-            });
+            };
+
+            // 根据配置开关路由：编排模式 or 直接执行
+            if (aiProperties.getOrchestrator().isEnabled()) {
+                orchestratorAgent.orchestrate(userMessage, skillContext, agentCallback);
+            } else {
+                agentExecutor.execute(provider, config, agentContext, agentCallback);
+            }
 
         } catch (Exception e) {
             logger.error("处理消息错误: {}", e.getMessage(), e);

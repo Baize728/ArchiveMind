@@ -1,9 +1,8 @@
 package com.zyh.archivemind.agent;
 
 import com.zyh.archivemind.Llm.*;
-import com.zyh.archivemind.skill.Skill;
-import com.zyh.archivemind.skill.SkillRegistry;
 import com.zyh.archivemind.skill.SkillResult;
+import com.zyh.archivemind.skill.UnifiedSkillRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -34,14 +33,14 @@ public class AgentExecutor {
 
     private static final Logger logger = LoggerFactory.getLogger(AgentExecutor.class);
 
-    private final SkillRegistry skillRegistry;
+    private final UnifiedSkillRegistry skillRegistry;
     private final ToolCallParser toolCallParser;
 
     /** 用于执行阻塞的 Skill 调用，避免占用 Reactor IO 线程 */
     private final ScheduledExecutorService toolExecutor =
             Executors.newScheduledThreadPool(4, r -> new Thread(r, "agent-tool-executor"));
 
-    public AgentExecutor(SkillRegistry skillRegistry, ToolCallParser toolCallParser) {
+    public AgentExecutor(UnifiedSkillRegistry skillRegistry, ToolCallParser toolCallParser) {
         this.skillRegistry = skillRegistry;
         this.toolCallParser = toolCallParser;
     }
@@ -141,30 +140,23 @@ public class AgentExecutor {
     }
 
     /**
-     * 执行 Skill，带超时控制
-     * 注意：此方法已在 toolExecutor 线程上运行，直接同步执行 Skill
-     * 超时通过 watchdog 线程实现，避免提交到同一线程池导致死锁
+     * 执行 Skill，通过 UnifiedSkillRegistry 统一路由
+     * 注意：此方法已在 toolExecutor 线程上运行，直接同步执行
      */
     private SkillResult executeSkill(ToolCall toolCall, AgentContext context) {
-        Skill skill = skillRegistry.getSkill(toolCall.getFunctionName());
-        if (skill == null) {
-            logger.warn("未找到 Skill: {}", toolCall.getFunctionName());
-            return SkillResult.failure("未知工具: " + toolCall.getFunctionName());
-        }
-
         try {
             Map<String, Object> params = toolCallParser.parseArguments(toolCall);
             long startTime = System.currentTimeMillis();
 
-            // 直接在当前线程同步执行（当前已在 toolExecutor 线程上）
-            SkillResult result = skill.execute(context.getSkillContext(), params);
+            SkillResult result = skillRegistry.executeSkill(
+                    toolCall.getFunctionName(), context.getSkillContext(), params);
 
             long elapsed = System.currentTimeMillis() - startTime;
-            logger.info("Skill {} 执行完成，耗时: {}ms, 成功: {}",
-                    skill.getName(), elapsed, result.isSuccess());
+            logger.info("工具 {} 执行完成，耗时: {}ms, 成功: {}",
+                    toolCall.getFunctionName(), elapsed, result.isSuccess());
             return result;
         } catch (Exception e) {
-            logger.error("Skill {} 执行异常: {}", skill.getName(), e.getMessage(), e);
+            logger.error("工具 {} 执行异常: {}", toolCall.getFunctionName(), e.getMessage(), e);
             return SkillResult.failure("工具执行失败: " + e.getMessage());
         }
     }

@@ -16,6 +16,7 @@ public class AiProperties {
     private Prompt prompt = new Prompt();
     private Rewrite rewrite = new Rewrite();
     private Thinking thinking = new Thinking();
+    private Orchestrator orchestrator = new Orchestrator();
 
     @Data
     public static class Rewrite {
@@ -60,5 +61,11 @@ public class AiProperties {
         private boolean enabled = true;
         /** thinkingContent 持久化最大字符数，超出截断 */
         private int maxPersistLength = 20000;
+    }
+
+    @Data
+    public static class Orchestrator {
+        /** 是否启用编排模式（多 Agent 协作） */
+        private boolean enabled = false;
     }
 }
