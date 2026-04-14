@@ -2,6 +2,8 @@ package com.zyh.archivemind.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zyh.archivemind.Llm.*;
+import com.zyh.archivemind.agent.AgentCallback;
+import com.zyh.archivemind.agent.AgentExecutor;
 import com.zyh.archivemind.config.AiProperties;
 import com.zyh.archivemind.dto.SessionDTO;
 import net.jqwik.api.*;
@@ -44,35 +46,32 @@ class ChatHandlerPropertyTest {
         RedisTemplate<String, String> redisTemplate = mock(RedisTemplate.class);
         @SuppressWarnings("unchecked")
         ValueOperations<String, String> valueOperations = mock(ValueOperations.class);
-        HybridSearchService searchService = mock(HybridSearchService.class);
         ConversationSessionService conversationSessionService = mock(ConversationSessionService.class);
-        LlmRouter llmRouter = mock(LlmRouter.class);
-        ToolCallParser toolCallParser = mock(ToolCallParser.class);
         UserLlmPreferenceService preferenceService = mock(UserLlmPreferenceService.class);
+        AgentExecutor agentExecutor = mock(AgentExecutor.class);
         LlmProvider llmProvider = mock(LlmProvider.class);
         WebSocketSession wsSession = mock(WebSocketSession.class);
 
         when(redisTemplate.opsForValue()).thenReturn(valueOperations);
         when(wsSession.getId()).thenReturn("ws-" + UUID.randomUUID());
         when(preferenceService.getProviderForUser(anyString())).thenReturn(llmProvider);
-        when(llmProvider.supportsToolCalling()).thenReturn(false);
 
         String activeSessionId = UUID.randomUUID().toString();
         when(conversationSessionService.getActiveSessionId(userId)).thenReturn(activeSessionId);
         String expectedKey = "conversation:" + activeSessionId;
         when(valueOperations.get(expectedKey)).thenReturn(null);
 
-        // LLM 直接返回文本
+        // AgentExecutor 直接回调 onComplete
         doAnswer(inv -> {
-            LlmStreamCallback cb = inv.getArgument(1);
+            AgentCallback cb = inv.getArgument(3);
             cb.onTextChunk("AI回复");
             cb.onComplete();
             return null;
-        }).when(llmProvider).streamChat(any(), any());
+        }).when(agentExecutor).execute(any(), any(), any(), any());
 
         ChatHandler chatHandler = new ChatHandler(
-                redisTemplate, searchService, conversationSessionService,
-                llmRouter, toolCallParser, preferenceService, new AiProperties());
+                redisTemplate, conversationSessionService,
+                preferenceService, agentExecutor, new AiProperties());
 
         // Act
         chatHandler.processMessage(userId, messageContent, wsSession);
@@ -109,18 +108,15 @@ class ChatHandlerPropertyTest {
         RedisTemplate<String, String> redisTemplate = mock(RedisTemplate.class);
         @SuppressWarnings("unchecked")
         ValueOperations<String, String> valueOperations = mock(ValueOperations.class);
-        HybridSearchService searchService = mock(HybridSearchService.class);
         ConversationSessionService conversationSessionService = mock(ConversationSessionService.class);
-        LlmRouter llmRouter = mock(LlmRouter.class);
-        ToolCallParser toolCallParser = mock(ToolCallParser.class);
         UserLlmPreferenceService preferenceService = mock(UserLlmPreferenceService.class);
+        AgentExecutor agentExecutor = mock(AgentExecutor.class);
         LlmProvider llmProvider = mock(LlmProvider.class);
         WebSocketSession wsSession = mock(WebSocketSession.class);
 
         when(redisTemplate.opsForValue()).thenReturn(valueOperations);
         when(wsSession.getId()).thenReturn("ws-" + UUID.randomUUID());
         when(preferenceService.getProviderForUser(anyString())).thenReturn(llmProvider);
-        when(llmProvider.supportsToolCalling()).thenReturn(false);
 
         // 无活跃会话
         when(conversationSessionService.getActiveSessionId(userId)).thenReturn(null);
@@ -132,15 +128,15 @@ class ChatHandlerPropertyTest {
         when(valueOperations.get(expectedKey)).thenReturn(null);
 
         doAnswer(inv -> {
-            LlmStreamCallback cb = inv.getArgument(1);
+            AgentCallback cb = inv.getArgument(3);
             cb.onTextChunk("AI回复");
             cb.onComplete();
             return null;
-        }).when(llmProvider).streamChat(any(), any());
+        }).when(agentExecutor).execute(any(), any(), any(), any());
 
         ChatHandler chatHandler = new ChatHandler(
-                redisTemplate, searchService, conversationSessionService,
-                llmRouter, toolCallParser, preferenceService, new AiProperties());
+                redisTemplate, conversationSessionService,
+                preferenceService, agentExecutor, new AiProperties());
 
         // Act
         chatHandler.processMessage(userId, messageContent, wsSession);

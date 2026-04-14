@@ -1,6 +1,7 @@
 package com.zyh.archivemind.service;
 
 import com.zyh.archivemind.Llm.*;
+import com.zyh.archivemind.agent.AgentExecutor;
 import com.zyh.archivemind.config.AiProperties;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -22,11 +23,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ChatHandlerCleanupTest {
 
     @Mock private RedisTemplate<String, String> redisTemplate;
-    @Mock private HybridSearchService searchService;
     @Mock private ConversationSessionService conversationSessionService;
-    @Mock private LlmRouter llmRouter;
-    @Mock private ToolCallParser toolCallParser;
     @Mock private UserLlmPreferenceService preferenceService;
+    @Mock private AgentExecutor agentExecutor;
 
     private ChatHandler chatHandler;
 
@@ -38,8 +37,8 @@ class ChatHandlerCleanupTest {
     @SuppressWarnings("unchecked")
     @BeforeEach
     void setUp() throws Exception {
-        chatHandler = new ChatHandler(redisTemplate, searchService, conversationSessionService,
-                llmRouter, toolCallParser, preferenceService, new AiProperties());
+        chatHandler = new ChatHandler(redisTemplate, conversationSessionService,
+                preferenceService, agentExecutor, new AiProperties());
 
         sessionStartTimes = getField("sessionStartTimes");
         responseBuilders = getField("responseBuilders");
