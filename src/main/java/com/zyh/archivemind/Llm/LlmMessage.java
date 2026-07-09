@@ -1,5 +1,6 @@
 package com.zyh.archivemind.Llm;
 
+import com.zyh.archivemind.Tool.ToolCall;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;

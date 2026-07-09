@@ -1,7 +1,6 @@
 package com.zyh.archivemind.agent;
 
-import com.zyh.archivemind.Llm.ToolCall;
-import com.zyh.archivemind.skill.SkillResult;
+import com.zyh.archivemind.Tool.ToolCall;
 
 /**
  * Agent 事件回调接口
@@ -19,7 +18,7 @@ public interface AgentCallback {
     void onToolCallStart(ToolCall toolCall);
 
     /** 工具调用完成 */
-    void onToolCallEnd(ToolCall toolCall, SkillResult result);
+    void onToolCallEnd(ToolCall toolCall, ToolCall.ToolResult result);
 
     /** Agent 执行完成 */
     void onComplete();

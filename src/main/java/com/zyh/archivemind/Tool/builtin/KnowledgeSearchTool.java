@@ -1,10 +1,10 @@
-package com.zyh.archivemind.skill.builtin;
+package com.zyh.archivemind.Tool.builtin;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zyh.archivemind.entity.SearchResult;
-import com.zyh.archivemind.skill.Skill;
-import com.zyh.archivemind.skill.SkillContext;
-import com.zyh.archivemind.skill.SkillResult;
+import com.zyh.archivemind.Tool.Tool;
+import com.zyh.archivemind.Tool.ToolCall;
 import com.zyh.archivemind.service.HybridSearchService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -16,20 +16,19 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 知识库搜索 Skill
+ * 知识库搜索 Tool
  * 封装 HybridSearchService.searchWithPermission()
- * 从 ChatHandler.executeToolCall() 中提取而来
  */
 @Component
-public class KnowledgeSearchSkill implements Skill {
+public class KnowledgeSearchTool implements Tool {
 
-    private static final Logger logger = LoggerFactory.getLogger(KnowledgeSearchSkill.class);
+    private static final Logger logger = LoggerFactory.getLogger(KnowledgeSearchTool.class);
     private static final int DEFAULT_TOP_K = 5;
+    private static final ObjectMapper objectMapper = new ObjectMapper();
 
     private final HybridSearchService searchService;
-    private final ObjectMapper objectMapper = new ObjectMapper();
 
-    public KnowledgeSearchSkill(HybridSearchService searchService) {
+    public KnowledgeSearchTool(HybridSearchService searchService) {
         this.searchService = searchService;
     }
 
@@ -44,33 +43,26 @@ public class KnowledgeSearchSkill implements Skill {
     }
 
     @Override
-    public Map<String, Object> getParameterSchema() {
-        Map<String, Object> parameters = new LinkedHashMap<>();
-        parameters.put("type", "object");
-        parameters.put("properties", Map.of(
-                "query", Map.of(
-                        "type", "string",
-                        "description", "搜索关键词或问题"
-                )
-        ));
-        parameters.put("required", List.of("query"));
-        return parameters;
+    public JsonNode getParameterSchema() {
+        return Tool.buildSchema(
+                new Tool.Param("query", "string", "搜索关键词或问题")
+        );
     }
 
     @Override
-    public SkillResult execute(SkillContext context, Map<String, Object> params) {
+    public ToolCall.ToolResult execute(Tool.ToolContext context, Map<String, Object> params) {
         String query = (String) params.getOrDefault("query", "");
         if (query.trim().isEmpty()) {
-            return SkillResult.failure("搜索查询不能为空");
+            return ToolCall.ToolResult.failure("搜索查询不能为空");
         }
 
         try {
-            logger.info("执行知识库搜索: query={}, userId={}", query, context.getUserId());
+            logger.info("执行知识库搜索: query={}, userId={}", query, context.userId());
             List<SearchResult> results = searchService.searchWithPermission(
-                    query, context.getUserId(), DEFAULT_TOP_K);
+                    query, context.userId(), DEFAULT_TOP_K);
 
             if (results.isEmpty()) {
-                return SkillResult.success("未找到与 \"" + query + "\" 相关的文档");
+                return ToolCall.ToolResult.success("未找到与 \"" + query + "\" 相关的文档");
             }
 
             // 格式化搜索结果（使用 ObjectMapper 安全序列化，与原 ChatHandler 逻辑一致）
@@ -88,10 +80,10 @@ public class KnowledgeSearchSkill implements Skill {
                 formatted.add(item);
             }
 
-            return SkillResult.success(objectMapper.writeValueAsString(formatted));
+            return ToolCall.ToolResult.success(objectMapper.writeValueAsString(formatted));
         } catch (Exception e) {
             logger.error("知识库搜索失败: {}", e.getMessage(), e);
-            return SkillResult.failure("搜索失败: " + e.getMessage());
+            return ToolCall.ToolResult.failure("搜索失败: " + e.getMessage());
         }
     }
 }

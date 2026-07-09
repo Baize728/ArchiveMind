@@ -5,14 +5,14 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zyh.archivemind.Llm.*;
 import com.zyh.archivemind.Llm.UserLlmPreferenceService;
+import com.zyh.archivemind.Tool.ToolCall;
 import com.zyh.archivemind.agent.AgentCallback;
 import com.zyh.archivemind.agent.AgentConfig;
 import com.zyh.archivemind.agent.AgentContext;
 import com.zyh.archivemind.agent.AgentExecutor;
 import com.zyh.archivemind.config.AiProperties;
 import com.zyh.archivemind.dto.SessionDTO;
-import com.zyh.archivemind.skill.SkillContext;
-import com.zyh.archivemind.skill.SkillResult;
+import com.zyh.archivemind.Tool.Tool;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -100,11 +100,7 @@ public class ChatHandler {
                     .build();
 
             // 构建 Agent 上下文
-            SkillContext skillContext = SkillContext.builder()
-                    .userId(userId)
-                    .sessionId(session.getId())
-                    .conversationId(conversationId)
-                    .build();
+            Tool.ToolContext skillContext = new Tool.ToolContext(userId, session.getId(), conversationId);
 
             AgentContext agentContext = AgentContext.builder()
                     .skillContext(skillContext)
@@ -135,9 +131,9 @@ public class ChatHandler {
                 }
 
                 @Override
-                public void onToolCallEnd(ToolCall toolCall, SkillResult result) {
+                public void onToolCallEnd(ToolCall toolCall, ToolCall.ToolResult result) {
                     sendToolCallNotification(session, toolCall,
-                            result.isSuccess() ? "done" : "failed");
+                            result.success() ? "done" : "failed");
                 }
 
                 @Override
@@ -170,7 +166,7 @@ public class ChatHandler {
     private List<LlmMessage> buildLlmMessages(String userMessage, List<Map<String, String>> history) {
         List<LlmMessage> messages = new ArrayList<>();
 
-        // system prompt：从配置读取规则（可用工具由 AgentExecutor 通过 ToolDefinition 注入）
+        // system prompt：从配置读取规则（可用工具由 AgentExecutor 通过 Tool 接口注入）
         messages.add(LlmMessage.system(aiProperties.getPrompt().getRules()));
 
         // 历史消息
@@ -303,7 +299,7 @@ public class ChatHandler {
         try {
             Map<String, Object> notification = Map.of(
                     "type", "tool_call",
-                    "function", toolCall.getFunctionName(),
+                    "function", toolCall.functionName(),
                     "status", status
             );
             session.sendMessage(new TextMessage(objectMapper.writeValueAsString(notification)));
