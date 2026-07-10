@@ -38,17 +38,4 @@ public record ToolCall(String id, String functionName, String arguments) {
         }
     }
 
-    /**
-     * 工具执行结果
-     */
-    public record ToolResult(boolean success, String content) {
-
-        public static ToolResult success(String content) {
-            return new ToolResult(true, content);
-        }
-
-        public static ToolResult failure(String errorMessage) {
-            return new ToolResult(false, errorMessage);
-        }
-    }
 }

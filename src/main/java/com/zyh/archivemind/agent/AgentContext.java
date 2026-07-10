@@ -17,7 +17,7 @@ import java.util.List;
 public class AgentContext {
 
     /** 工具 执行上下文 */
-    private Tool.ToolContext skillContext;
+    private Tool.ToolContext toolContext;
 
     /** 消息列表（随 Agent 循环不断追加） */
     @Builder.Default

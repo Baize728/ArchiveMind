@@ -45,11 +45,25 @@ public interface Tool {
      * @param params  调用参数（由 LLM 生成）
      * @return 执行结果
      */
-    ToolCall.ToolResult execute(ToolContext context, Map<String, Object> params);
+    ToolResult execute(ToolContext context, Map<String, Object> params);
 
     /** 执行超时秒数，默认 30 秒 */
     default int getTimeoutSeconds() {
         return 30;
+    }
+
+    /**
+     * 工具执行结果
+     */
+    record ToolResult(boolean success, String content) {
+
+        public static ToolResult success(String content) {
+            return new ToolResult(true, content);
+        }
+
+        public static ToolResult failure(String errorMessage) {
+            return new ToolResult(false, errorMessage);
+        }
     }
 
     /** 从 Param 列表自动生成 JSON Schema */

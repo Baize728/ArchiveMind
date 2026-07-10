@@ -167,6 +167,13 @@
             <version>2.10.1</version>
         </dependency>
 
+        <!-- Jsoup HTML parser -->
+        <dependency>
+            <groupId>org.jsoup</groupId>
+            <artifactId>jsoup</artifactId>
+            <version>1.18.1</version>
+        </dependency>
+
         <!-- HanLP for Chinese text segmentation -->
         <dependency>
             <groupId>com.hankcs</groupId>

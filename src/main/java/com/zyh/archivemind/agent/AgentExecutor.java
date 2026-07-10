@@ -36,14 +36,14 @@ public class AgentExecutor {
 
     private static final Logger logger = LoggerFactory.getLogger(AgentExecutor.class);
 
-    private final ToolRegistry skillRegistry;
+    private final ToolRegistry toolRegistry;
 
-    /** 用于执行阻塞的 Skill 调用，避免占用 Reactor IO 线程 */
+    /** 用于执行阻塞的 Tool 调用，避免占用 Reactor IO 线程 */
     private final ScheduledExecutorService toolExecutor =
             Executors.newScheduledThreadPool(4, r -> new Thread(r, "agent-tool-executor"));
 
-    public AgentExecutor(ToolRegistry skillRegistry) {
-        this.skillRegistry = skillRegistry;
+    public AgentExecutor(ToolRegistry toolRegistry) {
+        this.toolRegistry = toolRegistry;
     }
 
     /**
@@ -58,7 +58,7 @@ public class AgentExecutor {
                         AgentContext context, AgentCallback callback) {
         logger.info("开始执行 Agent，最大循环: {}", config.getMaxIterations());
         try {
-            List<Tool> tools = skillRegistry.getAll();
+            List<Tool> tools = toolRegistry.getAll();
             executeLoop(provider, config, context, tools, callback);
         } catch (Exception e) {
             logger.error("Agent 执行失败: {}", e.getMessage(), e);
@@ -106,7 +106,7 @@ public class AgentExecutor {
 
                 // 切到独立线程执行 Tool，避免阻塞 Reactor IO 线程
                 CompletableFuture.runAsync(() -> {
-                    ToolCall.ToolResult result = executeSkill(toolCall, context);
+                    Tool.ToolResult result = executeTool(toolCall, context);
                     callback.onToolCallEnd(toolCall, result);
 
                     // 追加 assistant tool_call 消息和 tool result 消息
@@ -145,11 +145,11 @@ public class AgentExecutor {
      * 注意：此方法已在 toolExecutor 线程上运行，直接同步执行 Tool
      * 超时通过 watchdog 线程实现，避免提交到同一线程池导致死锁
      */
-    private ToolCall.ToolResult executeSkill(ToolCall toolCall, AgentContext context) {
-        Tool skill = skillRegistry.get(toolCall.functionName());
-        if (skill == null) {
+    private Tool.ToolResult executeTool(ToolCall toolCall, AgentContext context) {
+        Tool tool = toolRegistry.get(toolCall.functionName());
+        if (tool == null) {
             logger.warn("未找到 Tool: {}", toolCall.functionName());
-            return ToolCall.ToolResult.failure("未知工具: " + toolCall.functionName());
+            return Tool.ToolResult.failure("未知工具: " + toolCall.functionName());
         }
 
         try {
@@ -157,15 +157,15 @@ public class AgentExecutor {
             long startTime = System.currentTimeMillis();
 
             // 直接在当前线程同步执行（当前已在 toolExecutor 线程上）
-            ToolCall.ToolResult result = skill.execute(context.getSkillContext(), params);
+            Tool.ToolResult result = tool.execute(context.getToolContext(), params);
 
             long elapsed = System.currentTimeMillis() - startTime;
-            logger.info("Skill {} 执行完成，耗时: {}ms, 成功: {}",
-                    skill.getName(), elapsed, result.success());
+            logger.info("Tool {} 执行完成，耗时: {}ms, 成功: {}",
+                    tool.getName(), elapsed, result.success());
             return result;
         } catch (Exception e) {
-            logger.error("Skill {} 执行异常: {}", skill.getName(), e.getMessage(), e);
-            return ToolCall.ToolResult.failure("工具执行失败: " + e.getMessage());
+            logger.error("Tool {} 执行异常: {}", tool.getName(), e.getMessage(), e);
+            return Tool.ToolResult.failure("工具执行失败: " + e.getMessage());
         }
     }
 }

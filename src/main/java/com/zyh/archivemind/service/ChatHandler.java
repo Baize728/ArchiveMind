@@ -100,10 +100,10 @@ public class ChatHandler {
                     .build();
 
             // 构建 Agent 上下文
-            Tool.ToolContext skillContext = new Tool.ToolContext(userId, session.getId(), conversationId);
+            Tool.ToolContext toolContext = new Tool.ToolContext(userId, session.getId(), conversationId);
 
             AgentContext agentContext = AgentContext.builder()
-                    .skillContext(skillContext)
+                    .toolContext(toolContext)
                     .messages(messages)
                     .build();
 
@@ -131,7 +131,7 @@ public class ChatHandler {
                 }
 
                 @Override
-                public void onToolCallEnd(ToolCall toolCall, ToolCall.ToolResult result) {
+                public void onToolCallEnd(ToolCall toolCall, Tool.ToolResult result) {
                     sendToolCallNotification(session, toolCall,
                             result.success() ? "done" : "failed");
                 }

@@ -1,5 +1,6 @@
 package com.zyh.archivemind.agent;
 
+import com.zyh.archivemind.Tool.Tool;
 import com.zyh.archivemind.Tool.ToolCall;
 
 /**
@@ -18,7 +19,7 @@ public interface AgentCallback {
     void onToolCallStart(ToolCall toolCall);
 
     /** 工具调用完成 */
-    void onToolCallEnd(ToolCall toolCall, ToolCall.ToolResult result);
+    void onToolCallEnd(ToolCall toolCall, Tool.ToolResult result);
 
     /** Agent 执行完成 */
     void onComplete();

@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zyh.archivemind.entity.SearchResult;
 import com.zyh.archivemind.Tool.Tool;
-import com.zyh.archivemind.Tool.ToolCall;
 import com.zyh.archivemind.service.HybridSearchService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -50,10 +49,10 @@ public class KnowledgeSearchTool implements Tool {
     }
 
     @Override
-    public ToolCall.ToolResult execute(Tool.ToolContext context, Map<String, Object> params) {
+    public Tool.ToolResult execute(Tool.ToolContext context, Map<String, Object> params) {
         String query = (String) params.getOrDefault("query", "");
         if (query.trim().isEmpty()) {
-            return ToolCall.ToolResult.failure("搜索查询不能为空");
+            return Tool.ToolResult.failure("搜索查询不能为空");
         }
 
         try {
@@ -62,7 +61,7 @@ public class KnowledgeSearchTool implements Tool {
                     query, context.userId(), DEFAULT_TOP_K);
 
             if (results.isEmpty()) {
-                return ToolCall.ToolResult.success("未找到与 \"" + query + "\" 相关的文档");
+                return Tool.ToolResult.success("未找到与 \"" + query + "\" 相关的文档");
             }
 
             // 格式化搜索结果（使用 ObjectMapper 安全序列化，与原 ChatHandler 逻辑一致）
@@ -80,10 +79,10 @@ public class KnowledgeSearchTool implements Tool {
                 formatted.add(item);
             }
 
-            return ToolCall.ToolResult.success(objectMapper.writeValueAsString(formatted));
+            return Tool.ToolResult.success(objectMapper.writeValueAsString(formatted));
         } catch (Exception e) {
             logger.error("知识库搜索失败: {}", e.getMessage(), e);
-            return ToolCall.ToolResult.failure("搜索失败: " + e.getMessage());
+            return Tool.ToolResult.failure("搜索失败: " + e.getMessage());
         }
     }
 }
