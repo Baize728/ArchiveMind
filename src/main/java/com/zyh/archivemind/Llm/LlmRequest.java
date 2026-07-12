@@ -1,5 +1,6 @@
 package com.zyh.archivemind.Llm;
 
+import com.zyh.archivemind.Tool.Tool;
 import lombok.Builder;
 import lombok.Data;
 
@@ -15,8 +16,8 @@ public class LlmRequest {
     /** 消息列表（system + history + user） */
     private List<LlmMessage> messages;
 
-    /** 工具定义列表（可选，为空时不启用 Function Calling） */
-    private List<ToolDefinition> tools;
+    /** 工具列表（可选，为空时不启用 Function Calling，Tool 接口直接提供 LLM 所需定义） */
+    private List<Tool> tools;
 
     /** 生成参数（temperature、maxTokens 等） */
     private GenerationParams params;

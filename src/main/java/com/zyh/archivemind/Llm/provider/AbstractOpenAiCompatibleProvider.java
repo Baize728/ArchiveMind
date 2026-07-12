@@ -2,7 +2,14 @@ package com.zyh.archivemind.Llm.provider;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.zyh.archivemind.Llm.*;
+import com.zyh.archivemind.Llm.GenerationParams;
+import com.zyh.archivemind.Llm.LlmMessage;
+import com.zyh.archivemind.Llm.LlmProperties;
+import com.zyh.archivemind.Llm.LlmProvider;
+import com.zyh.archivemind.Llm.LlmRequest;
+import com.zyh.archivemind.Llm.LlmStreamCallback;
+import com.zyh.archivemind.Tool.ToolCall;
+import com.zyh.archivemind.Tool.Tool;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
@@ -95,11 +102,11 @@ public abstract class AbstractOpenAiCompatibleProvider implements LlmProvider {
             if (msg.getToolCall() != null) {
                 ToolCall tc = msg.getToolCall();
                 Map<String, Object> toolCallMap = new HashMap<>();
-                toolCallMap.put("id", tc.getId());
+                toolCallMap.put("id", tc.id());
                 toolCallMap.put("type", "function");
                 toolCallMap.put("function", Map.of(
-                        "name", tc.getFunctionName(),
-                        "arguments", tc.getArguments()
+                        "name", tc.functionName(),
+                        "arguments", tc.arguments()
                 ));
                 msgMap.put("tool_calls", List.of(toolCallMap));
             }
@@ -111,13 +118,13 @@ public abstract class AbstractOpenAiCompatibleProvider implements LlmProvider {
         // 工具定义
         if (request.getTools() != null && !request.getTools().isEmpty()) {
             List<Map<String, Object>> tools = new ArrayList<>();
-            for (ToolDefinition tool : request.getTools()) {
+            for (Tool tool : request.getTools()) {
                 tools.add(Map.of(
                         "type", "function",
                         "function", Map.of(
                                 "name", tool.getName(),
                                 "description", tool.getDescription(),
-                                "parameters", tool.getParameters()
+                                "parameters", tool.getParameterSchema()
                         )
                 ));
             }
@@ -185,13 +192,10 @@ public abstract class AbstractOpenAiCompatibleProvider implements LlmProvider {
 
         for (ToolCallBuffer buffer : toolCallBuffers.values()) {
             if (buffer.functionName != null) {
-                ToolCall toolCall = ToolCall.builder()
-                        .id(buffer.id)
-                        .functionName(buffer.functionName)
-                        .arguments(buffer.argumentsBuilder.toString())
-                        .build();
+                ToolCall toolCall = new ToolCall(
+                        buffer.id, buffer.functionName, buffer.argumentsBuilder.toString());
                 logger.info("[{}] 检测到工具调用: id={}, function={}, arguments={}",
-                        providerId, toolCall.getId(), toolCall.getFunctionName(), toolCall.getArguments());
+                        providerId, toolCall.id(), toolCall.functionName(), toolCall.arguments());
                 callback.onToolCall(toolCall);
             }
         }

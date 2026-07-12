@@ -1,5 +1,7 @@
 package com.zyh.archivemind.Llm;
 
+import com.zyh.archivemind.Tool.ToolCall;
+
 /**
  * LLM 流式响应回调接口
  * 用于处理 LLM 返回的各种事件类型

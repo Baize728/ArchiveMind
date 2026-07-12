@@ -1,7 +1,7 @@
 package com.zyh.archivemind.agent;
 
 import com.zyh.archivemind.Llm.LlmMessage;
-import com.zyh.archivemind.skill.SkillContext;
+import com.zyh.archivemind.Tool.Tool;
 import lombok.Builder;
 import lombok.Data;
 
@@ -16,8 +16,8 @@ import java.util.List;
 @Builder
 public class AgentContext {
 
-    /** Skill 执行上下文 */
-    private SkillContext skillContext;
+    /** 工具 执行上下文 */
+    private Tool.ToolContext toolContext;
 
     /** 消息列表（随 Agent 循环不断追加） */
     @Builder.Default
