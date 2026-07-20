@@ -50,4 +50,32 @@ public class ToolRegistry {
     public List<Tool> getAll() {
         return new ArrayList<>(tools.values());
     }
+
+    /**
+     * 动态注册一个 Tool（供 MCP 等外部工具源使用）
+     * 使用 putIfAbsent 防止同名覆盖
+     * @return true 如果注册成功，false 如果名称冲突
+     */
+    public boolean register(Tool tool) {
+        String name = tool.getName();
+        Tool existing = tools.putIfAbsent(name, tool);
+        if (existing != null) {
+            logger.warn("Tool '{}' 已存在，注册被拒绝", name);
+            return false;
+        }
+        logger.info("动态注册 Tool: {} - {}", name, tool.getDescription());
+        return true;
+    }
+
+    /**
+     * 动态注销一个 Tool
+     * @return 被移除的 Tool，如果不存在返回 null
+     */
+    public Tool unregister(String name) {
+        Tool removed = tools.remove(name);
+        if (removed != null) {
+            logger.info("动态注销 Tool: {}", name);
+        }
+        return removed;
+    }
 }
