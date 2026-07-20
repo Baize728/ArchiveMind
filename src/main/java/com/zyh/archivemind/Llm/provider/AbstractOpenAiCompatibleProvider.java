@@ -10,6 +10,7 @@ import com.zyh.archivemind.Llm.LlmRequest;
 import com.zyh.archivemind.Llm.LlmStreamCallback;
 import com.zyh.archivemind.Tool.ToolCall;
 import com.zyh.archivemind.Tool.Tool;
+import com.zyh.archivemind.entity.SearchResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
@@ -17,6 +18,7 @@ import org.springframework.http.MediaType;
 import org.springframework.web.reactive.function.client.WebClient;
 
 import java.util.*;
+import java.util.function.Consumer;
 
 /**
  * OpenAI 兼容接口的公共基类
@@ -207,3 +209,4 @@ public abstract class AbstractOpenAiCompatibleProvider implements LlmProvider {
         final StringBuilder argumentsBuilder = new StringBuilder();
     }
 }
+

@@ -61,4 +61,9 @@ public interface FileUploadRepository extends JpaRepository<FileUpload, Long> {
     List<FileUpload> findByUserId(String userId);
 
     List<FileUpload> findByFileMd5In(List<String> md5List);
+
+    /**
+     * 获取最近更新的文件，用于知识库统计
+     */
+    Optional<FileUpload> findTopByOrderByMergedAtDesc();
 }
