@@ -1,0 +1,32 @@
+# ============================================================
+# MCP (Model Context Protocol) 客户端配置
+# 通过 spring.config.import 导入到 application.yml
+# ============================================================
+mcp:
+  enabled: false                        # 总开关，设为 true 启用 MCP
+  servers:
+    # 示例：接入 filesystem MCP Server（通过 npx 启动，stdio 传输）
+    # filesystem:
+    #   type: stdio
+    #   command: npx
+    #   args:
+    #     - "-y"
+    #     - "@anthropic/mcp-server-filesystem"
+    #     - "/path/to/allowed/directory"
+    #   enabled: true
+
+    # 示例：接入 postgres MCP Server
+    # postgres:
+    #   type: stdio
+    #   command: npx
+    #   args:
+    #     - "-y"
+    #     - "@anthropic/mcp-server-postgres"
+    #     - "postgresql://localhost/mydb"
+    #   enabled: false
+
+    # 示例：接入远程 MCP Server（SSE 传输）
+     remote-tools:
+       type: sse
+       url: http://localhost:3001/sse
+       enabled: true
