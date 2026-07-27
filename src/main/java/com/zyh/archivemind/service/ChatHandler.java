@@ -70,8 +70,10 @@ public class ChatHandler {
 
     public void processMessage(String userId, String userMessage, WebSocketSession session) {
         logger.info("开始处理消息，用户ID: {}, 会话ID: {}", userId, session.getId());
+        String conversationId = null;
         try {
-            String conversationId = getOrCreateConversationId(userId);
+            conversationId = getOrCreateConversationId(userId);
+            final String convId = conversationId;
             responseBuilders.put(session.getId(), new StringBuilder());
             thinkingBuilders.put(session.getId(), new StringBuilder());
             sessionStartTimes.put(session.getId(), System.currentTimeMillis());
@@ -138,12 +140,12 @@ public class ChatHandler {
 
                 @Override
                 public void onComplete() {
-                    finishResponse(session, conversationId, userId, userMessage, responseFuture);
+                    finishResponse(session, convId, userId, userMessage, responseFuture);
                 }
 
                 @Override
                 public void onError(Throwable error) {
-                    handleError(session, error);
+                    handleError(session, error, convId, userId, userMessage);
                     responseFuture.completeExceptionally(error);
                     cleanupSession(session.getId());
                     responseFutures.remove(session.getId());
@@ -152,7 +154,7 @@ public class ChatHandler {
 
         } catch (Exception e) {
             logger.error("处理消息错误: {}", e.getMessage(), e);
-            handleError(session, e);
+            handleError(session, e, conversationId, userId, userMessage);
             cleanupSession(session.getId());
             CompletableFuture<String> future = responseFutures.remove(session.getId());
             if (future != null && !future.isDone()) future.completeExceptionally(e);
@@ -322,13 +324,28 @@ public class ChatHandler {
         }
     }
 
-    private void handleError(WebSocketSession session, Throwable error) {
+    private void handleError(WebSocketSession session, Throwable error,
+                             String conversationId, String userId, String userMessage) {
         logger.error("AI服务错误: {}", error.getMessage(), error);
+        String fallbackReply = "AI服务暂时不可用，请稍后重试";
         try {
-            String json = objectMapper.writeValueAsString(Map.of("error", "AI服务暂时不可用，请稍后重试"));
+            String json = objectMapper.writeValueAsString(Map.of("error", fallbackReply));
             session.sendMessage(new TextMessage(json));
         } catch (Exception e) {
             logger.error("发送错误消息失败: {}", e.getMessage(), e);
+        }
+
+        // 即使 LLM 失败，也要把用户问题和兜底回复保存到对话历史，便于后续排查和 BadCase 回流
+        if (conversationId != null && userMessage != null && !userMessage.isEmpty()) {
+            try {
+                updateConversationHistory(conversationId, userMessage, fallbackReply, null);
+                if (userId != null) {
+                    conversationSessionService.refreshSessionTTL(userId, conversationId);
+                }
+            } catch (Exception persistEx) {
+                logger.warn("LLM 异常时保存对话历史失败: conversationId={}, 错误: {}",
+                        conversationId, persistEx.getMessage());
+            }
         }
     }
 
