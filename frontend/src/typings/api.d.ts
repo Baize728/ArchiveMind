@@ -242,6 +242,96 @@ declare namespace Api {
     }
   }
 
+  namespace Trace {
+    /** Trace 列表查询参数 */
+    type ListParams = CommonType.RecordNullable<{
+      startDate: string;
+      endDate: string;
+      userId: string;
+      sessionId: string;
+      keyword: string;
+      status: 'OK' | 'ERROR' | '';
+      page: number;
+      size: number;
+    }>;
+
+    /** 单条 Trace 摘要（列表行） */
+    interface TraceSummary {
+      traceId: string;
+      conversationId: string;
+      userId: string;
+      sessionId: string;
+      createdAt: string;
+      eventCount: number;
+      totalInputTokens: number;
+      totalOutputTokens: number;
+      totalLatencyMs: number;
+      llmCallCount: number;
+      hasError: boolean;
+      errorMessage: string;
+      firstUserInput: string;
+    }
+
+    /** 列表聚合统计 */
+    interface ListStats {
+      totalCount: number;
+      errorCount: number;
+      p50Latency: string;
+      p99Latency: string;
+      totalTokens: string;
+    }
+
+    /** 列表响应 */
+    interface ListResponse {
+      list: TraceSummary[];
+      total: number;
+      stats: ListStats;
+    }
+
+    /** 单个事件（对应后端 TraceEvent） */
+    interface EventItem {
+      traceId: string;
+      conversationId: string;
+      userId: string;
+      sessionId: string;
+      stepOrder: number;
+      eventType: 'USER_INPUT' | 'AGENT_START' | 'LLM_CALL' | 'TOOL_CALL' | 'AGENT_COMPLETE' | 'ERROR';
+      phase: 'INPUT' | 'AGENT' | 'LLM' | 'TOOL' | 'ERROR';
+      model: string;
+      inputPayload: string;
+      outputPayload: string;
+      inputTokens: number;
+      outputTokens: number;
+      totalTokens: number;
+      latencyMs: number;
+      success: boolean;
+      createdAt: string;
+    }
+
+    /** 详情头部摘要 */
+    interface DetailSummary {
+      traceId: string;
+      conversationId: string;
+      userId: string;
+      sessionId: string;
+      status: 'SUCCESS' | 'ERROR';
+      startTime: string;
+      endTime: string;
+      durationMs: number;
+      eventCount: number;
+      llmCallCount: number;
+      inputTokens: number;
+      outputTokens: number;
+      totalTokens: number;
+    }
+
+    /** 详情响应 */
+    interface DetailResponse {
+      summary: DetailSummary;
+      events: EventItem[];
+    }
+  }
+
   namespace Document {
     interface DownloadResponse {
       fileName: string;

@@ -10,6 +10,8 @@ import com.zyh.archivemind.agent.AgentCallback;
 import com.zyh.archivemind.agent.AgentConfig;
 import com.zyh.archivemind.agent.AgentContext;
 import com.zyh.archivemind.agent.AgentExecutor;
+import com.zyh.archivemind.trace.TraceCollector;
+import com.zyh.archivemind.trace.TraceScope;
 import com.zyh.archivemind.config.AiProperties;
 import com.zyh.archivemind.dto.SessionDTO;
 import com.zyh.archivemind.Tool.Tool;
@@ -27,6 +29,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -44,6 +47,7 @@ public class ChatHandler {
     private final AgentExecutor agentExecutor;
     private final AiProperties aiProperties;
     private final ObjectMapper objectMapper;
+    private final TraceCollector traceCollector;
 
     private final Map<String, StringBuilder> responseBuilders = new ConcurrentHashMap<>();
     private final Map<String, StringBuilder> thinkingBuilders = new ConcurrentHashMap<>();
@@ -59,18 +63,23 @@ public class ChatHandler {
                        ConversationSessionService conversationSessionService,
                        UserLlmPreferenceService preferenceService,
                        AgentExecutor agentExecutor,
-                       AiProperties aiProperties) {
+                       AiProperties aiProperties,
+                       TraceCollector traceCollector) {
         this.redisTemplate = redisTemplate;
         this.conversationSessionService = conversationSessionService;
         this.preferenceService = preferenceService;
         this.agentExecutor = agentExecutor;
         this.aiProperties = aiProperties;
         this.objectMapper = new ObjectMapper();
+        this.traceCollector = traceCollector;
     }
 
     public void processMessage(String userId, String userMessage, WebSocketSession session) {
         logger.info("开始处理消息，用户ID: {}, 会话ID: {}", userId, session.getId());
         String conversationId = null;
+        // Trace 作用域持有器（effectively-final，便于在回调 lambda 与 catch 中共享同一引用）
+        // 受 trace.online-persist / sampling 控制，未命中时 openTrace 返回 noop
+        final AtomicReference<TraceScope> traceScopeRef = new AtomicReference<>(TraceScope.noop());
         try {
             conversationId = getOrCreateConversationId(userId);
             final String convId = conversationId;
@@ -79,6 +88,11 @@ public class ChatHandler {
             sessionStartTimes.put(session.getId(), System.currentTimeMillis());
             CompletableFuture<String> responseFuture = new CompletableFuture<>();
             responseFutures.put(session.getId(), responseFuture);
+
+            // 开启 Trace：在线对话默认落库（受 trace.online-persist / sampling 控制）
+            TraceScope traceScope = traceCollector.openTrace(conversationId, userId, session.getId(), false);
+            traceScopeRef.set(traceScope);
+            traceScope.recordUserInput(userMessage);
 
             List<Map<String, String>> history = getConversationHistory(conversationId);
 
@@ -108,6 +122,8 @@ public class ChatHandler {
                     .toolContext(toolContext)
                     .messages(messages)
                     .build();
+            // 显式透传 TraceScope 给 Agent 循环（跨 Reactor / toolExecutor 线程共享同一引用）
+            agentContext.setTraceScope(traceScope);
 
             // 执行 Agent，通过回调桥接 WebSocket
             agentExecutor.execute(provider, config, agentContext, new AgentCallback() {
@@ -140,11 +156,17 @@ public class ChatHandler {
 
                 @Override
                 public void onComplete() {
+                    TraceScope scope = traceScopeRef.get();
+                    scope.recordAgentComplete();
+                    scope.close();
                     finishResponse(session, convId, userId, userMessage, responseFuture);
                 }
 
                 @Override
                 public void onError(Throwable error) {
+                    TraceScope scope = traceScopeRef.get();
+                    scope.recordError(error.getMessage());
+                    scope.close();
                     handleError(session, error, convId, userId, userMessage);
                     responseFuture.completeExceptionally(error);
                     cleanupSession(session.getId());
@@ -154,6 +176,9 @@ public class ChatHandler {
 
         } catch (Exception e) {
             logger.error("处理消息错误: {}", e.getMessage(), e);
+            TraceScope scope = traceScopeRef.get();
+            scope.recordError(e.getMessage());
+            scope.close();
             handleError(session, e, conversationId, userId, userMessage);
             cleanupSession(session.getId());
             CompletableFuture<String> future = responseFutures.remove(session.getId());

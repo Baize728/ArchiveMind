@@ -8,6 +8,8 @@ import com.zyh.archivemind.agent.AgentContext;
 import com.zyh.archivemind.agent.AgentExecutor;
 import com.zyh.archivemind.config.AiProperties;
 import com.zyh.archivemind.dto.SessionDTO;
+import com.zyh.archivemind.trace.TraceCollector;
+import com.zyh.archivemind.trace.TraceScope;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -35,6 +37,7 @@ class ChatHandlerTest {
     @Mock private AgentExecutor agentExecutor;
     @Mock private LlmProvider llmProvider;
     @Mock private WebSocketSession session;
+    @Mock private TraceCollector traceCollector;
 
     private ChatHandler chatHandler;
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -43,7 +46,8 @@ class ChatHandlerTest {
     void setUp() {
         chatHandler = new ChatHandler(
                 redisTemplate, conversationSessionService,
-                preferenceService, agentExecutor, new AiProperties());
+                preferenceService, agentExecutor, new AiProperties(), traceCollector);
+        lenient().when(traceCollector.openTrace(any(), any(), any(), anyBoolean())).thenReturn(TraceScope.noop());
         lenient().when(redisTemplate.opsForValue()).thenReturn(valueOperations);
         lenient().when(session.getId()).thenReturn("test-session-id");
         lenient().when(preferenceService.getProviderForUser(anyString())).thenReturn(llmProvider);

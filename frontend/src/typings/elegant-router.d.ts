@@ -27,6 +27,7 @@ declare module "@elegant-router/types" {
     "login": "/login/:module(pwd-login|code-login|register|reset-pwd|bind-wechat)?";
     "org-tag": "/org-tag";
     "personal-center": "/personal-center";
+    "trace": "/trace";
     "user": "/user";
   };
 
@@ -69,6 +70,7 @@ declare module "@elegant-router/types" {
     | "login"
     | "org-tag"
     | "personal-center"
+    | "trace"
     | "user"
   >;
 
@@ -96,6 +98,7 @@ declare module "@elegant-router/types" {
     | "knowledge-base"
     | "org-tag"
     | "personal-center"
+    | "trace"
     | "user"
   >;
 

@@ -3,6 +3,7 @@ package com.zyh.archivemind.service;
 import com.zyh.archivemind.Llm.*;
 import com.zyh.archivemind.agent.AgentExecutor;
 import com.zyh.archivemind.config.AiProperties;
+import com.zyh.archivemind.trace.TraceCollector;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -26,6 +27,7 @@ class ChatHandlerCleanupTest {
     @Mock private ConversationSessionService conversationSessionService;
     @Mock private UserLlmPreferenceService preferenceService;
     @Mock private AgentExecutor agentExecutor;
+    @Mock private TraceCollector traceCollector;
 
     private ChatHandler chatHandler;
 
@@ -38,7 +40,7 @@ class ChatHandlerCleanupTest {
     @BeforeEach
     void setUp() throws Exception {
         chatHandler = new ChatHandler(redisTemplate, conversationSessionService,
-                preferenceService, agentExecutor, new AiProperties());
+                preferenceService, agentExecutor, new AiProperties(), traceCollector);
 
         sessionStartTimes = getField("sessionStartTimes");
         responseBuilders = getField("responseBuilders");

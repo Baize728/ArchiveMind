@@ -122,6 +122,18 @@ export const generatedRoutes: GeneratedRoute[] = [
     }
   },
   {
+    name: 'trace',
+    path: '/trace',
+    component: 'layout.base$view.trace',
+    meta: {
+      title: 'trace',
+      i18nKey: 'route.trace',
+      icon: 'solar:chart-2-line-duotone',
+      roles: ['ADMIN'],
+      order: 7
+    }
+  },
+  {
     name: 'user',
     path: '/user',
     component: 'layout.base$view.user',
