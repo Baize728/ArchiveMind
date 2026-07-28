@@ -6,6 +6,8 @@ import com.zyh.archivemind.agent.AgentCallback;
 import com.zyh.archivemind.agent.AgentExecutor;
 import com.zyh.archivemind.config.AiProperties;
 import com.zyh.archivemind.dto.SessionDTO;
+import com.zyh.archivemind.trace.TraceCollector;
+import com.zyh.archivemind.trace.TraceScope;
 import net.jqwik.api.*;
 import net.jqwik.api.constraints.AlphaChars;
 import net.jqwik.api.constraints.StringLength;
@@ -69,9 +71,12 @@ class ChatHandlerPropertyTest {
             return null;
         }).when(agentExecutor).execute(any(), any(), any(), any());
 
+        TraceCollector traceCollector = mock(TraceCollector.class);
+        when(traceCollector.openTrace(any(), any(), any(), anyBoolean())).thenReturn(TraceScope.noop());
+
         ChatHandler chatHandler = new ChatHandler(
                 redisTemplate, conversationSessionService,
-                preferenceService, agentExecutor, new AiProperties());
+                preferenceService, agentExecutor, new AiProperties(), traceCollector);
 
         // Act
         chatHandler.processMessage(userId, messageContent, wsSession);
@@ -134,9 +139,12 @@ class ChatHandlerPropertyTest {
             return null;
         }).when(agentExecutor).execute(any(), any(), any(), any());
 
+        TraceCollector traceCollector = mock(TraceCollector.class);
+        when(traceCollector.openTrace(any(), any(), any(), anyBoolean())).thenReturn(TraceScope.noop());
+
         ChatHandler chatHandler = new ChatHandler(
                 redisTemplate, conversationSessionService,
-                preferenceService, agentExecutor, new AiProperties());
+                preferenceService, agentExecutor, new AiProperties(), traceCollector);
 
         // Act
         chatHandler.processMessage(userId, messageContent, wsSession);

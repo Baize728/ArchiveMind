@@ -2,6 +2,7 @@ package com.zyh.archivemind.agent;
 
 import com.zyh.archivemind.Llm.LlmMessage;
 import com.zyh.archivemind.Tool.Tool;
+import com.zyh.archivemind.trace.TraceScope;
 import lombok.Builder;
 import lombok.Data;
 
@@ -26,4 +27,11 @@ public class AgentContext {
     /** 当前循环次数 */
     @Builder.Default
     private int currentIteration = 0;
+
+    /**
+     * 本次会话的 Trace 作用域（在线/评测采集用，可空）。
+     * 通过 AgentContext 显式透传（Agent 循环跨 Reactor / toolExecutor 线程，
+     * 不能用 ThreadLocal），保证所有线程写入同一份 Trace。
+     */
+    private TraceScope traceScope;
 }

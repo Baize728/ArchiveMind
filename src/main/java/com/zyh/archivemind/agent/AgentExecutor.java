@@ -7,6 +7,8 @@ import com.zyh.archivemind.Llm.LlmStreamCallback;
 import com.zyh.archivemind.Tool.ToolCall;
 import com.zyh.archivemind.Tool.Tool;
 import com.zyh.archivemind.Tool.ToolRegistry;
+import com.zyh.archivemind.trace.TraceScope;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -38,6 +40,9 @@ public class AgentExecutor {
 
     private final ToolRegistry toolRegistry;
 
+    /** 用于把 LLM 输入消息序列化为 Trace 的 inputPayload */
+    private final ObjectMapper objectMapper = new ObjectMapper();
+
     /** 用于执行阻塞的 Tool 调用，避免占用 Reactor IO 线程 */
     private final ScheduledExecutorService toolExecutor =
             Executors.newScheduledThreadPool(4, r -> new Thread(r, "agent-tool-executor"));
@@ -59,6 +64,9 @@ public class AgentExecutor {
         logger.info("开始执行 Agent，最大循环: {}", config.getMaxIterations());
         try {
             List<Tool> tools = toolRegistry.getAll();
+            if (context.getTraceScope() != null) {
+                context.getTraceScope().recordAgentStart();
+            }
             executeLoop(provider, config, context, tools, callback);
         } catch (Exception e) {
             logger.error("Agent 执行失败: {}", e.getMessage(), e);
@@ -85,8 +93,26 @@ public class AgentExecutor {
                 .build();
 
         final boolean[] toolCalled = {false};
+        final long llmStart = System.currentTimeMillis();
+        final StringBuilder llmText = new StringBuilder();
+        final boolean[] llmRecorded = {false};
+        final TraceScope traceScope = context.getTraceScope();
 
         provider.streamChat(request, new LlmStreamCallback() {
+            /** 记录本轮 LLM_CALL（每轮最多记录一次） */
+            private void recordLlmCall() {
+                if (llmRecorded[0]) {
+                    return;
+                }
+                llmRecorded[0] = true;
+                long elapsed = System.currentTimeMillis() - llmStart;
+                if (traceScope != null) {
+                    traceScope.recordLlmCall(provider.getProviderId(),
+                            serializeMessages(context.getMessages()),
+                            llmText.toString(), elapsed);
+                }
+            }
+
             @Override
             public void onThinkingChunk(String chunk) {
                 callback.onThinkingChunk(chunk);
@@ -94,19 +120,29 @@ public class AgentExecutor {
 
             @Override
             public void onTextChunk(String chunk) {
+                llmText.append(chunk);
                 callback.onTextChunk(chunk);
             }
 
             @Override
             public void onToolCall(ToolCall toolCall) {
+                recordLlmCall();
                 toolCalled[0] = true;
                 logger.info("Agent 请求调用工具: {}, 参数: {}",
                         toolCall.functionName(), toolCall.arguments());
                 callback.onToolCallStart(toolCall);
 
+                final long toolStart = System.currentTimeMillis();
+
                 // 切到独立线程执行 Tool，避免阻塞 Reactor IO 线程
                 CompletableFuture.runAsync(() -> {
                     Tool.ToolResult result = executeTool(toolCall, context);
+                    if (traceScope != null) {
+                        long toolElapsed = System.currentTimeMillis() - toolStart;
+                        traceScope.recordToolCall(
+                                toolCall.functionName() + "(" + toolCall.arguments() + ")",
+                                result.content(), toolElapsed, result.success());
+                    }
                     callback.onToolCallEnd(toolCall, result);
 
                     // 追加 assistant tool_call 消息和 tool result 消息
@@ -128,6 +164,7 @@ public class AgentExecutor {
 
             @Override
             public void onComplete() {
+                recordLlmCall();
                 if (!toolCalled[0]) {
                     callback.onComplete();
                 }
@@ -138,6 +175,16 @@ public class AgentExecutor {
                 callback.onError(error);
             }
         });
+    }
+
+    /** 将发给 LLM 的消息列表序列化为 JSON 字符串（用于 Trace 的 inputPayload） */
+    private String serializeMessages(List<LlmMessage> messages) {
+        try {
+            return objectMapper.writeValueAsString(messages);
+        } catch (Exception e) {
+            logger.warn("序列化 Trace 输入消息失败：{}", e.getMessage());
+            return "[序列化失败]";
+        }
     }
 
     /**

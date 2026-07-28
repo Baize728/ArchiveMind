@@ -166,6 +166,7 @@ const local: App.I18n.Schema = {
     'chat-history': '对话审计',
     'knowledge-base': '知识库',
     'org-tag': '组织标签',
+    trace: 'Trace 可观测',
     user: '用户管理',
     'personal-center': '个人中心'
   },
