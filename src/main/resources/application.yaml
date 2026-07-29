@@ -1,0 +1,202 @@
+# =============================================================================
+# ArchiveMind 后端配置（模板版）
+#
+# 所有环境相关值均使用 ${VAR_NAME:default} 占位符，可通过以下方式注入：
+#   1. 启动参数：java -jar app.jar --server.port=8080
+#   2. 环境变量：export SERVER_PORT=8080
+#   3. 外部配置：spring.config.import=optional:file:./.env[.properties]
+#
+# 占位符语法：${VAR_NAME:默认值}
+#   - ${VAR_NAME}        必填，未设置时启动失败
+#   - ${VAR_NAME:default} 可选，未设置时使用 default
+# =============================================================================
+
+server:
+  port: ${SERVER_PORT:8080}
+  servlet:
+    context-path: /
+
+spring:
+  application:
+    name: ${APP_NAME:ArchiveMind}
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+
+  # ---------------- 文件上传限制 ----------------
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: ${MAX_FILE_SIZE:10MB}
+      max-request-size: ${MAX_REQUEST_SIZE:50MB}
+
+  # ---------------- WebFlux / Codec 缓冲（流式 LLM 响应需要） ----------------
+  webflux:
+    client:
+      max-in-memory-size: ${WEBFLUX_MAX_IN_MEMORY:16MB}
+  codec:
+    max-in-memory-size: ${CODEC_MAX_IN_MEMORY:16MB}
+
+  # ---------------- 数据源（MySQL） ----------------
+  datasource:
+    url: ${MYSQL_URL:jdbc:mysql://localhost:3306/archivemind?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true}
+    username: ${MYSQL_USERNAME:archivemind}
+    password: ${MYSQL_PASSWORD:}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  # ---------------- JPA / Hibernate ----------------
+  jpa:
+    hibernate:
+      ddl-auto: ${JPA_DDL_AUTO:update}
+    show-sql: ${JPA_SHOW_SQL:false}
+    properties:
+      hibernate:
+        dialect: ${HIBERNATE_DIALECT:org.hibernate.dialect.MySQLDialect}
+        format_sql: false
+    open-in-view: false
+
+  # ---------------- Redis ----------------
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      database: ${REDIS_DATABASE:0}
+      timeout: ${REDIS_TIMEOUT:5000ms}
+
+  # ---------------- Kafka ----------------
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      acks: ${KAFKA_PRODUCER_ACKS:all}
+      retries: ${KAFKA_PRODUCER_RETRIES:3}
+      enable-idempotence: ${KAFKA_PRODUCER_IDEMPOTENCE:true}
+      transactional-id-prefix: ${KAFKA_PRODUCER_TX_PREFIX:file-upload-tx-}
+      properties:
+        client.dns.lookup: use_all_dns_ips
+    consumer:
+      group-id: ${KAFKA_CONSUMER_GROUP_ID:archivemind-group}
+      auto-offset-reset: ${KAFKA_CONSUMER_AUTO_OFFSET_RESET:earliest}
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: ${KAFKA_TRUSTED_PACKAGES:com.zyh.archivemind.*,java.util,java.lang}
+        client.dns.lookup: use_all_dns_ips
+    topic:
+      file-processing: ${KAFKA_TOPIC_FILE_PROCESSING:file-processing}
+      dlt: ${KAFKA_TOPIC_DLT:file-processing-dlt}
+
+# ---------------- Elasticsearch ----------------
+elasticsearch:
+  host: ${ES_HOST:localhost}
+  port: ${ES_PORT:9200}
+  scheme: ${ES_SCHEME:http}
+  username: ${ES_USERNAME:}
+  password: ${ES_PASSWORD:}
+
+# ---------------- MinIO 对象存储 ----------------
+minio:
+  endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
+  accessKey: ${MINIO_ACCESS_KEY:}
+  secretKey: ${MINIO_SECRET_KEY:}
+  bucketName: ${MINIO_BUCKET:uploads}
+  publicUrl: ${MINIO_PUBLIC_URL:http://localhost:9000}
+
+# ---------------- 嵌入向量 API（通义千问 DashScope 兼容接口） ----------------
+embedding:
+  api:
+    url: ${EMBEDDING_API_URL:https://dashscope.aliyuncs.com/compatible-mode/v1}
+    key: ${EMBEDDING_API_KEY:YOUR_DASHSCOPE_API_KEY}
+    model: ${EMBEDDING_MODEL:text-embedding-v3}
+    batch-size: ${EMBEDDING_BATCH_SIZE:100}
+    dimension: ${EMBEDDING_DIMENSION:1024}
+
+# ---------------- 文件解析 ----------------
+file:
+  parsing:
+    chunk-size: ${FILE_CHUNK_SIZE:1000}
+    parent-chunk-size: ${FILE_PARENT_CHUNK_SIZE:1048576}
+    buffer-size: ${FILE_BUFFER_SIZE:8192}
+    max-memory-threshold: ${FILE_MAX_MEMORY:0.8}
+
+# ---------------- JWT ----------------
+jwt:
+  secret-key: ${JWT_SECRET_KEY:}
+
+# ---------------- 管理员初始账号（仅首次启动创建） ----------------
+admin:
+  username: ${ADMIN_USERNAME:admin}
+  password: ${ADMIN_PASSWORD:}
+  primary-org: ${ADMIN_PRIMARY_ORG:default}
+  org-tags: ${ADMIN_ORG_TAGS:default,admin}
+
+# ---------------- 多 LLM Provider ----------------
+llm:
+  default-provider: ${LLM_DEFAULT_PROVIDER:deepseek}
+  providers:
+    deepseek:
+      enabled: ${LLM_DEEPSEEK_ENABLED:true}
+      api-url: ${LLM_DEEPSEEK_API_URL:https://api.deepseek.com/v1}
+      api-key: ${LLM_DEEPSEEK_API_KEY:YOUR_DEEPSEEK_API_KEY}
+      model: ${LLM_DEEPSEEK_MODEL:deepseek-chat}
+      supports-tool-calling: true
+    openai:
+      enabled: ${LLM_OPENAI_ENABLED:false}
+      api-url: ${LLM_OPENAI_API_URL:https://api.openai.com/v1}
+      api-key: ${LLM_OPENAI_API_KEY:}
+      model: ${LLM_OPENAI_MODEL:gpt-4o}
+      supports-tool-calling: true
+    qwen:
+      enabled: ${LLM_QWEN_ENABLED:false}
+      api-url: ${LLM_QWEN_API_URL:https://dashscope.aliyuncs.com/compatible-mode/v1}
+      api-key: ${LLM_QWEN_API_KEY:}
+      model: ${LLM_QWEN_MODEL:qwen-plus}
+      supports-tool-calling: true
+    ollama:
+      enabled: ${LLM_OLLAMA_ENABLED:false}
+      api-url: ${LLM_OLLAMA_API_URL:http://localhost:11434}
+      api-key: ${LLM_OLLAMA_API_KEY:}
+      model: ${LLM_OLLAMA_MODEL:deepseek-r1:7b}
+      supports-tool-calling: true
+  generation:
+    temperature: ${LLM_GEN_TEMPERATURE:0.3}
+    max-tokens: ${LLM_GEN_MAX_TOKENS:2000}
+    top-p: ${LLM_GEN_TOP_P:0.9}
+
+# ---------------- AI Prompt 模板 ----------------
+# 注意：prompt 文本含特殊字符（冒号/引号），不适合放在 ${} 占位符默认值中。
+# 请通过环境变量 AI_PROMPT_RULES 注入，或使用默认空值（代码里有硬编码兜底）。
+ai:
+  prompt:
+    rules: ${AI_PROMPT_RULES:}
+    ref-start: ${AI_PROMPT_REF_START:<<REF>>}
+    ref-end: ${AI_PROMPT_REF_END:<<END>>}
+    no-result-text: ${AI_PROMPT_NO_RESULT:本轮无检索结果}
+  rewrite:
+    enabled: ${AI_REWRITE_ENABLED:true}
+    api-url: ${AI_REWRITE_API_URL:}
+    api-key: ${AI_REWRITE_API_KEY:}
+    model: ${AI_REWRITE_MODEL:}
+    max-history-rounds: ${AI_REWRITE_MAX_HISTORY:3}
+    timeout-seconds: ${AI_REWRITE_TIMEOUT:15}
+  orchestrator:
+    enabled: ${AI_ORCHESTRATOR_ENABLED:false}
+
+# ---------------- Trace 采集 ----------------
+trace:
+  enabled: ${TRACE_ENABLED:true}
+  sample-rate: ${TRACE_SAMPLE_RATE:1.0}
+  flush-batch-size: ${TRACE_FLUSH_BATCH:200}
+  flush-interval-ms: ${TRACE_FLUSH_INTERVAL:500}
+  mask-sensitive: ${TRACE_MASK_SENSITIVE:true}
+  max-payload-length: ${TRACE_MAX_PAYLOAD:8192}
+
+# ---------------- 日志级别 ----------------
+logging:
+  level:
+    org.springframework.web: ${LOG_LEVEL_SPRING_WEB:INFO}
+    org.springframework.security: ${LOG_LEVEL_SPRING_SECURITY:INFO}
+    com.zyh.archivemind: ${LOG_LEVEL_APP:INFO}
+    io.minio: ${LOG_LEVEL_MINIO:INFO}
+    org.apache.kafka: ${LOG_LEVEL_KAFKA:WARN}

@@ -65,6 +65,8 @@ public class SecurityConfig {
                             .requestMatchers("/api/chat/websocket-token").permitAll()
                             // 管理员专属接口 - 知识库管理、系统状态、用户活动监控
                             .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
+                            // Trace 可观测（仅管理员）
+                            .requestMatchers("/api/v1/traces/**").hasRole("ADMIN")
                             // 用户组织标签管理接口
                             .requestMatchers("/api/v1/users/primary-org").hasAnyRole("USER", "ADMIN")
                             // 其他请求需要认证
