@@ -10,6 +10,9 @@ import com.zyh.archivemind.agent.AgentCallback;
 import com.zyh.archivemind.agent.AgentConfig;
 import com.zyh.archivemind.agent.AgentContext;
 import com.zyh.archivemind.agent.AgentExecutor;
+import com.zyh.archivemind.intent.Intent;
+import com.zyh.archivemind.intent.IntentResult;
+import com.zyh.archivemind.intent.IntentRouter;
 import com.zyh.archivemind.trace.TraceCollector;
 import com.zyh.archivemind.trace.TraceScope;
 import com.zyh.archivemind.config.AiProperties;
@@ -48,6 +51,8 @@ public class ChatHandler {
     private final AiProperties aiProperties;
     private final ObjectMapper objectMapper;
     private final TraceCollector traceCollector;
+    private final IntentRouter intentRouter;
+    private final com.zyh.archivemind.client.IntentLlmClient intentLlmClient;
 
     private final Map<String, StringBuilder> responseBuilders = new ConcurrentHashMap<>();
     private final Map<String, StringBuilder> thinkingBuilders = new ConcurrentHashMap<>();
@@ -64,7 +69,9 @@ public class ChatHandler {
                        UserLlmPreferenceService preferenceService,
                        AgentExecutor agentExecutor,
                        AiProperties aiProperties,
-                       TraceCollector traceCollector) {
+                       TraceCollector traceCollector,
+                       IntentRouter intentRouter,
+                       com.zyh.archivemind.client.IntentLlmClient intentLlmClient) {
         this.redisTemplate = redisTemplate;
         this.conversationSessionService = conversationSessionService;
         this.preferenceService = preferenceService;
@@ -72,6 +79,8 @@ public class ChatHandler {
         this.aiProperties = aiProperties;
         this.objectMapper = new ObjectMapper();
         this.traceCollector = traceCollector;
+        this.intentRouter = intentRouter;
+        this.intentLlmClient = intentLlmClient;
     }
 
     public void processMessage(String userId, String userMessage, WebSocketSession session) {
@@ -94,6 +103,9 @@ public class ChatHandler {
             traceScopeRef.set(traceScope);
             traceScope.recordUserInput(userMessage);
 
+            // 记录 Agent 开始时间，用于 onComplete 时算总耗时
+            final long agentStartTime = System.currentTimeMillis();
+
             List<Map<String, String>> history = getConversationHistory(conversationId);
 
             if (history.isEmpty()) {
@@ -106,6 +118,27 @@ public class ChatHandler {
 
             // 构建 LlmMessage 列表（system prompt + 历史 + 当前问题）
             List<LlmMessage> messages = buildLlmMessages(userMessage, history);
+
+            // ========== T1-1 意图识别与路由 ==========
+            IntentResult intentResult = intentRouter.route(userMessage, history);
+            traceScope.recordIntent(userMessage, intentResult.intent().name(),
+                    intentResult.confidence(), intentResult.source());
+
+            switch (intentResult.intent()) {
+                case CHITCHAT -> {
+                    handleChitchat(userMessage, session, convId, userId, traceScope, responseFuture);
+                    return;
+                }
+                case AMBIGUOUS -> {
+                    handleAmbiguous(session, convId, userId, userMessage, traceScope, responseFuture);
+                    return;
+                }
+                case KNOWLEDGE_QA, DOC_OPERATION -> {
+                    // 落到下方原有 agentExecutor.execute 路径
+                    // DOC_OPERATION 一期仅 trace 标记差异，不另起链路
+                }
+            }
+            // ========== 原 AgentExecutor 路径 ==========
 
             // 获取用户偏好的 LLM Provider
             LlmProvider provider = preferenceService.getProviderForUser(userId);
@@ -157,7 +190,7 @@ public class ChatHandler {
                 @Override
                 public void onComplete() {
                     TraceScope scope = traceScopeRef.get();
-                    scope.recordAgentComplete();
+                    scope.recordAgentDuration(System.currentTimeMillis() - agentStartTime);
                     scope.close();
                     finishResponse(session, convId, userId, userMessage, responseFuture);
                 }
@@ -210,6 +243,70 @@ public class ChatHandler {
         // 当前用户问题
         messages.add(LlmMessage.user(userMessage));
         return messages;
+    }
+
+    /**
+     * 闲聊处理：用 IntentLlmClient 直回，不走工具/检索（T1-1）。
+     */
+    private void handleChitchat(String userMessage, WebSocketSession session,
+                                String convId, String userId,
+                                TraceScope traceScope, CompletableFuture<String> responseFuture) {
+        long startTime = System.currentTimeMillis();
+        try {
+            List<Map<String, String>> messages = List.of(
+                    Map.of("role", "system", "content",
+                            "你是ArchiveMind知识助手，用户在和您寒暄。请简短友好地回复一句话，引导用户提出知识库相关的问题。"),
+                    Map.of("role", "user", "content", userMessage)
+            );
+            String reply = intentLlmClient.chatSync(messages);
+            if (reply == null || reply.isBlank()) {
+                reply = "你好！我是ArchiveMind知识助手，有什么可以帮您查询的吗？";
+            }
+
+            // 一次性推送回复
+            StringBuilder builder = responseBuilders.get(session.getId());
+            if (builder != null) builder.append(reply);
+            sendAnswerChunk(session, reply);
+
+            traceScope.recordAgentDuration(System.currentTimeMillis() - startTime);
+            traceScope.close();
+            finishResponse(session, convId, userId, userMessage, responseFuture);
+        } catch (Exception e) {
+            logger.error("闲聊处理失败: {}", e.getMessage(), e);
+            traceScope.recordError(e.getMessage());
+            traceScope.close();
+            handleError(session, e, convId, userId, userMessage);
+            cleanupSession(session.getId());
+            responseFutures.remove(session.getId());
+        }
+    }
+
+    /**
+     * 模糊意图处理：返回固定提示文案，不进 RAG（T1-1）。
+     * T1-2 接入澄清层后，此方法将被替换为真实澄清逻辑。
+     */
+    private void handleAmbiguous(WebSocketSession session, String convId, String userId,
+                                  String userMessage, TraceScope traceScope,
+                                  CompletableFuture<String> responseFuture) {
+        long startTime = System.currentTimeMillis();
+        try {
+            String reply = aiProperties.getIntent().getAmbiguousReply();
+
+            StringBuilder builder = responseBuilders.get(session.getId());
+            if (builder != null) builder.append(reply);
+            sendAnswerChunk(session, reply);
+
+            traceScope.recordAgentDuration(System.currentTimeMillis() - startTime);
+            traceScope.close();
+            finishResponse(session, convId, userId, userMessage, responseFuture);
+        } catch (Exception e) {
+            logger.error("模糊意图处理失败: {}", e.getMessage(), e);
+            traceScope.recordError(e.getMessage());
+            traceScope.close();
+            handleError(session, e, convId, userId, userMessage);
+            cleanupSession(session.getId());
+            responseFutures.remove(session.getId());
+        }
     }
 
     /**

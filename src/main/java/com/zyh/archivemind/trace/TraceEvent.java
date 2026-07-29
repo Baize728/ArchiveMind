@@ -19,17 +19,18 @@ public class TraceEvent {
 
     /** 事件类型 */
     public enum EventType {
-        USER_INPUT,      // 用户输入
-        AGENT_START,     // Agent 开始
-        LLM_CALL,        // 大模型调用
-        TOOL_CALL,       // 工具调用
-        AGENT_COMPLETE,  // Agent 完成
-        ERROR            // 出错
+        USER_INPUT,         // 用户输入
+        LLM_CALL,           // 大模型调用
+        TOOL_CALL,          // 工具调用
+        AGENT_DURATION,     // Agent 总执行耗时（T1-1 替代 AGENT_START + AGENT_COMPLETE）
+        INTENT_RECOGNIZED,  // 意图识别（T1-1）
+        LEGACY,             // 历史废弃事件类型（AGENT_START/AGENT_COMPLETE 等）的兼容降级
+        ERROR               // 出错
     }
 
     /** 阶段（对齐 Diet-Agent phase：INPUT/AGENT/LLM/TOOL/ERROR） */
     public enum Phase {
-        INPUT, AGENT, LLM, TOOL, ERROR
+        INPUT, AGENT, LLM, TOOL, INTENT, ERROR
     }
 
     private String traceId;

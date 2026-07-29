@@ -13,6 +13,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.core.RedisTemplate;
 
 import java.lang.reflect.Field;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -28,6 +31,8 @@ class ChatHandlerCleanupTest {
     @Mock private UserLlmPreferenceService preferenceService;
     @Mock private AgentExecutor agentExecutor;
     @Mock private TraceCollector traceCollector;
+    @Mock private com.zyh.archivemind.intent.IntentRouter intentRouter;
+    @Mock private com.zyh.archivemind.client.IntentLlmClient intentLlmClient;
 
     private ChatHandler chatHandler;
 
@@ -40,7 +45,13 @@ class ChatHandlerCleanupTest {
     @BeforeEach
     void setUp() throws Exception {
         chatHandler = new ChatHandler(redisTemplate, conversationSessionService,
-                preferenceService, agentExecutor, new AiProperties(), traceCollector);
+                preferenceService, agentExecutor, new AiProperties(), traceCollector,
+                intentRouter, intentLlmClient);
+
+        // 默认意图为 KNOWLEDGE_QA，走 AgentExecutor 路径
+        lenient().when(intentRouter.route(any(), any()))
+                .thenReturn(new com.zyh.archivemind.intent.IntentResult(
+                        com.zyh.archivemind.intent.Intent.KNOWLEDGE_QA, 0.9, "LLM", ""));
 
         sessionStartTimes = getField("sessionStartTimes");
         responseBuilders = getField("responseBuilders");
