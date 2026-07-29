@@ -64,9 +64,6 @@ public class AgentExecutor {
         logger.info("开始执行 Agent，最大循环: {}", config.getMaxIterations());
         try {
             List<Tool> tools = toolRegistry.getAll();
-            if (context.getTraceScope() != null) {
-                context.getTraceScope().recordAgentStart();
-            }
             executeLoop(provider, config, context, tools, callback);
         } catch (Exception e) {
             logger.error("Agent 执行失败: {}", e.getMessage(), e);

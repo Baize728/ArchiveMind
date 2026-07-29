@@ -76,7 +76,8 @@ class ChatHandlerPropertyTest {
 
         ChatHandler chatHandler = new ChatHandler(
                 redisTemplate, conversationSessionService,
-                preferenceService, agentExecutor, new AiProperties(), traceCollector);
+                preferenceService, agentExecutor, new AiProperties(), traceCollector,
+                mockIntentRouter(), mock(com.zyh.archivemind.client.IntentLlmClient.class));
 
         // Act
         chatHandler.processMessage(userId, messageContent, wsSession);
@@ -144,7 +145,8 @@ class ChatHandlerPropertyTest {
 
         ChatHandler chatHandler = new ChatHandler(
                 redisTemplate, conversationSessionService,
-                preferenceService, agentExecutor, new AiProperties(), traceCollector);
+                preferenceService, agentExecutor, new AiProperties(), traceCollector,
+                mockIntentRouter(), mock(com.zyh.archivemind.client.IntentLlmClient.class));
 
         // Act
         chatHandler.processMessage(userId, messageContent, wsSession);
@@ -157,5 +159,14 @@ class ChatHandlerPropertyTest {
         verify(valueOperations, atLeastOnce()).set(
                 keyCaptor.capture(), anyString(), any(Duration.class));
         assertThat(keyCaptor.getValue()).isEqualTo(expectedKey);
+    }
+
+    /** 创建一个 mock IntentRouter，默认返回 KNOWLEDGE_QA 走 AgentExecutor 路径 */
+    private static com.zyh.archivemind.intent.IntentRouter mockIntentRouter() {
+        com.zyh.archivemind.intent.IntentRouter router = mock(com.zyh.archivemind.intent.IntentRouter.class);
+        when(router.route(any(), any())).thenReturn(
+                new com.zyh.archivemind.intent.IntentResult(
+                        com.zyh.archivemind.intent.Intent.KNOWLEDGE_QA, 0.9, "LLM", ""));
+        return router;
     }
 }

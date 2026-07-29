@@ -41,8 +41,8 @@ public class TraceService {
             .userId(rs.getString("user_id"))
             .sessionId(rs.getString("session_id"))
             .stepOrder(rs.getInt("step_order"))
-            .eventType(TraceEvent.EventType.valueOf(rs.getString("event_type")))
-            .phase(rs.getString("phase") != null ? TraceEvent.Phase.valueOf(rs.getString("phase")) : null)
+            .eventType(parseEventType(rs.getString("event_type")))
+            .phase(parsePhase(rs.getString("phase")))
             .model(rs.getString("model"))
             .inputPayload(rs.getString("input_payload"))
             .outputPayload(rs.getString("output_payload"))
@@ -169,17 +169,18 @@ public class TraceService {
             s.totalOutputTokens += event.getOutputTokens();
             s.totalLatencyMs += event.getLatencyMs();
 
-            if (event.getEventType() == TraceEvent.EventType.USER_INPUT && s.firstUserInput == null) {
+            TraceEvent.EventType type = event.getEventType();
+            if (type == TraceEvent.EventType.USER_INPUT && s.firstUserInput == null) {
                 s.firstUserInput = truncate(event.getInputPayload(), 80);
             }
-            if (event.getEventType() == TraceEvent.EventType.ERROR) {
+            if (type == TraceEvent.EventType.ERROR) {
                 s.hasError = true;
                 s.errorMessage = truncate(event.getOutputPayload(), 100);
             }
-            if (event.getEventType() == TraceEvent.EventType.LLM_CALL) {
+            if (type == TraceEvent.EventType.LLM_CALL) {
                 s.llmCallCount++;
             }
-            if (event.getEventType() == TraceEvent.EventType.TOOL_CALL && !event.isSuccess()) {
+            if (type == TraceEvent.EventType.TOOL_CALL && !event.isSuccess()) {
                 s.hasError = true;
             }
         }
@@ -282,17 +283,18 @@ public class TraceService {
             s.totalInputTokens += event.getInputTokens();
             s.totalOutputTokens += event.getOutputTokens();
             s.totalLatencyMs += event.getLatencyMs();
-            if (event.getEventType() == TraceEvent.EventType.USER_INPUT && s.firstUserInput == null) {
+            TraceEvent.EventType type = event.getEventType();
+            if (type == TraceEvent.EventType.USER_INPUT && s.firstUserInput == null) {
                 s.firstUserInput = truncate(event.getInputPayload(), 80);
             }
-            if (event.getEventType() == TraceEvent.EventType.ERROR) {
+            if (type == TraceEvent.EventType.ERROR) {
                 s.hasError = true;
                 s.errorMessage = truncate(event.getOutputPayload(), 100);
             }
-            if (event.getEventType() == TraceEvent.EventType.LLM_CALL) {
+            if (type == TraceEvent.EventType.LLM_CALL) {
                 s.llmCallCount++;
             }
-            if (event.getEventType() == TraceEvent.EventType.TOOL_CALL && !event.isSuccess()) {
+            if (type == TraceEvent.EventType.TOOL_CALL && !event.isSuccess()) {
                 s.hasError = true;
             }
         }
@@ -367,6 +369,8 @@ public class TraceService {
         if (events.isEmpty()) {
             return null;
         }
+        logger.debug("Trace 详情 traceId={} 共 {} 个事件, 第一个: type={}, input={}", traceId, events.size(),
+                events.get(0).getEventType(), events.get(0).getInputPayload());
 
         // 聚合头部信息
         TraceEvent first = events.get(0);
@@ -484,5 +488,26 @@ public class TraceService {
     public static class TraceDetailResult {
         public Map<String, Object> summary;
         public List<TraceEvent> events;
+    }
+
+    /** 容错解析事件类型枚举，兼容 DB 旧数据中已废弃的枚举值（如 AGENT_COMPLETE/AGENT_START） */
+    private static TraceEvent.EventType parseEventType(String raw) {
+        if (raw == null || raw.isBlank()) return null;
+        try {
+            return TraceEvent.EventType.valueOf(raw);
+        } catch (IllegalArgumentException e) {
+            // 已废弃枚举值（AGENT_START/AGENT_COMPLETE 等）降级为 LEGACY，不返回 null 避免前端处理麻烦
+            return TraceEvent.EventType.LEGACY;
+        }
+    }
+
+    /** 容错解析阶段枚举 */
+    private static TraceEvent.Phase parsePhase(String raw) {
+        if (raw == null || raw.isBlank()) return null;
+        try {
+            return TraceEvent.Phase.valueOf(raw);
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
     }
 }

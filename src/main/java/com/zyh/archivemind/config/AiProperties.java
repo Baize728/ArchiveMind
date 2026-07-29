@@ -4,6 +4,10 @@ import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
 /**
  * AI 相关配置，目前仅保留 Query Rewriting 配置。
  * Prompt 和 Generation 配置已迁移至 LlmProperties。
@@ -16,6 +20,7 @@ public class AiProperties {
     private Prompt prompt = new Prompt();
     private Rewrite rewrite = new Rewrite();
     private Thinking thinking = new Thinking();
+    private Intent intent = new Intent();
 
     @Data
     public static class Rewrite {
@@ -60,5 +65,33 @@ public class AiProperties {
         private boolean enabled = true;
         /** thinkingContent 持久化最大字符数，超出截断 */
         private int maxPersistLength = 20000;
+    }
+
+    @Data
+    public static class Intent {
+        /** 是否启用意图识别 */
+        private boolean enabled = true;
+        /** 意图识别用 LLM API 地址 */
+        private String apiUrl;
+        /** 意图识别用 LLM API Key */
+        private String apiKey;
+        /** 意图识别用 LLM 模型名称 */
+        private String model;
+        /** 同步调用超时时间（秒） */
+        private int timeoutSeconds = 10;
+        /** 低置信度降级 AMBIGUOUS 的阈值 */
+        private double ambiguousThreshold = 0.4;
+        /** AMBIGUOUS 时返回的固定提示文案 */
+        private String ambiguousReply = "您的问题我不太确定想查什么，能否补充一下（例如：哪个业务域/哪份文档/什么时间）？";
+        /** 意图识别 system prompt */
+        private String systemPrompt = "你是ArchiveMind知识库的意图识别模块。请将用户输入分类到以下四类意图之一：\n"
+                + "- KNOWLEDGE_QA：用户想从知识库查询信息，回答\"是什么/为什么/怎么做\"类问题。例：\"年假怎么申请\"\"报销标准是什么\"\n"
+                + "- CHITCHAT：用户打招呼、客套、寒暄，没有信息检索需求。例：\"你好\"\"谢谢\"\"你是谁\"\n"
+                + "- DOC_OPERATION：用户想对文档实体做操作（上传、归档、删除、移动、重命名），而非查文档内容。例：\"把这份合同归档\"\"上传员工手册\"\n"
+                + "- AMBIGUOUS：用户有查询意向但信息明显不足，无法定位到具体文档或业务域。例：\"那个政策\"\"帮我查一下规定\"\n"
+                + "只输出 JSON，格式为：{\"intent\":\"意图枚举名\",\"confidence\":0.9}\n"
+                + "不要寒暄，不要回答用户问题，不要输出任何解释。";
+        /** 关键词表，intent 名 -> 关键词列表 */
+        private Map<String, List<String>> keywords = new HashMap<>();
     }
 }

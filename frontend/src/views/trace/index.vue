@@ -182,15 +182,22 @@ function formatTokens(n: number): string {
 
 /** 事件类型标签颜色与文本 */
 function eventTypeTag(eventType: string): { type: 'success' | 'info' | 'warning' | 'error' | 'default'; label: string } {
-  const map: Record<string, { type: 'success' | 'info' | 'warning' | 'error' | 'default'; label: string }> = {
+  try {
+    const map: Record<string, { type: 'success' | 'info' | 'warning' | 'error' | 'default'; label: string }> = {
     USER_INPUT: { type: 'success', label: '输入' },
-    AGENT_START: { type: 'info', label: '输出' },
     LLM_CALL: { type: 'info', label: 'LLM' },
     TOOL_CALL: { type: 'warning', label: 'tool' },
-    AGENT_COMPLETE: { type: 'success', label: '输出' },
+    AGENT_DURATION: { type: 'success', label: '完成' },
+    INTENT_RECOGNIZED: { type: 'info', label: '意图识别' },
+    LEGACY: { type: 'default', label: '历史' },
     ERROR: { type: 'error', label: '错误' }
-  };
-  return map[eventType] || { type: 'default', label: eventType };
+    };
+    // null/undefined 兜底（兼容 DB 中已废弃枚举值被后端降级为 null 的情况）
+    if (!eventType) return { type: 'default', label: '未知' };
+    return map[eventType] || { type: 'default', label: eventType };
+  } catch {
+    return { type: 'default', label: '未知' };
+  }
 }
 
 /** 复制到剪贴板 */
@@ -638,6 +645,9 @@ const JsonTreeNode = defineComponent({
             </div>
 
             <NSpin :show="detailLoading" class="h-full">
+              <div v-if="!detailLoading && detailEvents.length === 0" class="px-4 py-6 text-center text-13px text-gray-400">
+                暂无事件数据
+              </div>
               <div
                 v-for="(event, idx) in detailEvents"
                 :key="idx"
@@ -652,7 +662,7 @@ const JsonTreeNode = defineComponent({
                   <span class="text-11px text-gray-400">{{ event.latencyMs > 0 ? formatLatency(event.latencyMs) : '-' }}</span>
                 </div>
                 <div class="mt-1 truncate text-12px text-gray-600 dark:text-gray-300">
-                  {{ event.model || event.eventType.replace('_', ' ') }}
+                  {{ event.inputPayload || event.model || event.eventType.replace('_', ' ') }}
                 </div>
                 <div class="mt-0.5 flex justify-between text-10px text-gray-400">
                   <span>{{ event.inputPayload ? formatSize(event.inputPayload.length) : '-' }}</span>

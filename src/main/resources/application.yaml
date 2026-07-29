@@ -21,6 +21,8 @@ spring:
     name: ${APP_NAME:ArchiveMind}
   profiles:
     active: ${SPRING_PROFILES_ACTIVE:dev}
+  config:
+    import: "optional:file:./.env[.properties]"
 
   # ---------------- 文件上传限制 ----------------
   servlet:
@@ -180,6 +182,18 @@ ai:
     model: ${AI_REWRITE_MODEL:}
     max-history-rounds: ${AI_REWRITE_MAX_HISTORY:3}
     timeout-seconds: ${AI_REWRITE_TIMEOUT:15}
+  intent:
+    enabled: ${AI_INTENT_ENABLED:true}
+    api-url: ${AI_INTENT_API_URL:}
+    api-key: ${AI_INTENT_API_KEY:}
+    model: ${AI_INTENT_MODEL:}
+    timeout-seconds: ${AI_INTENT_TIMEOUT:10}
+    ambiguous-threshold: ${AI_INTENT_AMBIGUOUS_THRESHOLD:0.4}
+    ambiguous-reply: ${AI_INTENT_AMBIGUOUS_REPLY:您的问题我不太确定想查什么，能否补充一下（例如：哪个业务域/哪份文档/什么时间）？}
+    keywords:
+      chitchat: ["你好","在吗","谢谢","再见","你是谁","你是AI"]
+      doc_operation: ["归档","上传文档","删除文档","移动文档","重命名"]
+      knowledge_qa: ["查询","检索","什么是","怎么","为什么","政策","规定","流程"]
   orchestrator:
     enabled: ${AI_ORCHESTRATOR_ENABLED:false}
 

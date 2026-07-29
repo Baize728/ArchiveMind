@@ -56,8 +56,8 @@ public class TraceScope implements AutoCloseable {
     }
 
     public void recordAgentStart() {
-        add(TraceEvent.EventType.AGENT_START, TraceEvent.Phase.AGENT, null,
-                null, null, 0, true);
+        // T1-1: 已废弃，改用 recordAgentDuration 在完成时记录总耗时
+        // 保留方法签名避免编译错误，但不再产生事件
     }
 
     public void recordLlmCall(String model, String inputPayload,
@@ -73,13 +73,31 @@ public class TraceScope implements AutoCloseable {
     }
 
     public void recordAgentComplete() {
-        add(TraceEvent.EventType.AGENT_COMPLETE, TraceEvent.Phase.AGENT, null,
-                null, null, 0, true);
+        // T1-1: 已废弃，改用 recordAgentDuration 在完成时记录总耗时
+        // 保留方法签名避免编译错误，但不再产生事件
+    }
+
+    /**
+     * 记录 Agent 总执行耗时（T1-1 替代 AGENT_START + AGENT_COMPLETE 两个事件）。
+     * 产生一条 AGENT_DURATION 事件，包含 latencyMs，无 payload。
+     */
+    public void recordAgentDuration(long latencyMs) {
+        add(TraceEvent.EventType.AGENT_DURATION, TraceEvent.Phase.AGENT, null,
+                null, null, latencyMs, true);
     }
 
     public void recordError(String message) {
         add(TraceEvent.EventType.ERROR, TraceEvent.Phase.ERROR, null,
                 null, message, 0, false);
+    }
+
+    /** 记录意图识别结果（T1-1） */
+    public void recordIntent(String userMessage, String intent, double confidence, String source) {
+        String payload = String.format(
+                "{\"intent\":\"%s\",\"confidence\":%.2f,\"source\":\"%s\"}",
+                intent, confidence, source);
+        add(TraceEvent.EventType.INTENT_RECOGNIZED, TraceEvent.Phase.INTENT, null,
+                userMessage, payload, 0, true);
     }
 
     private void add(TraceEvent.EventType type, TraceEvent.Phase phase, String model,
