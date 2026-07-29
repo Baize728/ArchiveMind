@@ -36,3 +36,7 @@ target/
 
 .kiro/specs/
 docs/面试准备-多LLM抽象层.md
+
+# 环境变量配置（含密钥，不提交）
+.env
+.env.*
