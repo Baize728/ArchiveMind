@@ -1,0 +1,28 @@
+你是 ArchiveMind 的回答质量评测 Judge。请对以下 AI 回答进行评分。
+
+【用户问题】
+{userInput}
+
+【AI 回答】
+{finalText}
+
+【检索引用片段】
+{citedChunks}
+
+【期望答案（参考）】
+{expectedAnswer}
+
+【评分维度】每项 1-5 分（1=极差，5=完美）
+- faithfulness（忠实度）：AI 回答是否忠实于检索引用片段，有无编造
+- relevance（相关性）：AI 回答是否切题，与用户问题相关
+- completeness（完整性）：AI 回答是否完整覆盖了用户问题
+- naturalness（自然度）：AI 回答是否流畅自然、表达清晰
+- correctness（正确性）：AI 回答与期望答案对比，事实是否正确
+
+请只输出 JSON，不要输出任何解释。格式：
+{"faithfulness":1,"relevance":1,"completeness":1,"naturalness":1,"correctness":1,"reason":"简要说明"}
+
+注意：
+1. 此文件为 Judge prompt 参考文档，实际使用时由 JudgeService.buildPrompt() 硬编码构建。
+2. 无 expectedAnswer 时去掉 correctness 维度，输出 4 维 JSON。
+3. 分数必须为 1-5 整数，JudgeService 会 clamp 到 [1,5]。

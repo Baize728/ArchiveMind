@@ -194,6 +194,8 @@ declare namespace Api {
       timestamp?: string;
       /** 工具调用状态列表（Agent 模式下 LLM 调用工具时填充） */
       toolCalls?: ToolCallStatus[];
+      /** Trace ID（T1-4 feedback 精准归因用，completion 帧回传） */
+      traceId?: string;
     }
 
     interface Token {
@@ -337,6 +339,122 @@ declare namespace Api {
       fileName: string;
       downloadUrl: string;
       fileSize: number;
+    }
+  }
+
+  namespace Feedback {
+    /** 反馈动作类型 */
+    type Action = 'LIKE' | 'DISLIKE' | 'PARTIAL_CORRECT' | 'OUTDATED';
+
+    /** 提交反馈请求 */
+    interface Request {
+      conversationId: string;
+      traceId: string;
+      action: Action;
+      rating?: number;
+      comment?: string;
+    }
+  }
+
+  namespace Eval {
+    /** 评测模式 */
+    type Mode = 'TIME_RANGE' | 'GOLD_SET' | 'BADCASE_ONLY';
+
+    /** 评测请求 */
+    interface Request {
+      mode: Mode;
+      startAt?: string;
+      endAt?: string;
+      userId?: string;
+      includeJudge?: boolean;
+      limit?: number;
+    }
+
+    /** 任务启动响应（data 字段内容） */
+    interface TaskStartResponse {
+      taskId: string;
+      status: string;
+    }
+
+    /** 指标统计 */
+    interface MetricStat {
+      value: number | null;
+      n: number;
+      scope?: string;
+    }
+
+    /** 单条 trace 评估结果 */
+    interface TraceEvalResult {
+      traceId: string;
+      conversationId: string;
+      createdAt: string;
+      score: number | null;
+      ruleScore: number | null;
+      judgeScore: number | null;
+      feedbackScore: number | null;
+      metrics: Record<string, number | null>;
+      detail: Record<string, unknown>;
+    }
+
+    /** 失败 trace */
+    interface FailedTrace {
+      traceId: string;
+      score: number;
+      failReason: string;
+    }
+
+    /** 评测报告 */
+    interface EvalReport {
+      startAt: string;
+      endAt: string;
+      totalTraces: number;
+      labeledTraces: number;
+      labelCoverage: number;
+      averageScore: number | null;
+      pass: boolean;
+      passReason: string | null;
+      metricAverages: Record<string, MetricStat>;
+      details: TraceEvalResult[];
+      failedTraces: FailedTrace[];
+    }
+
+    /** 任务状态响应（data 字段内容） */
+    interface TaskStatusResponse {
+      taskId: string;
+      status: 'RUNNING' | 'COMPLETED' | 'FAILED';
+      progress: { total: number; done: number };
+      result?: EvalReport;
+      errorMessage?: string;
+    }
+
+    /** 标注行 */
+    interface SampleRow {
+      traceId: string;
+      conversationId?: string;
+      expectedIntent?: string;
+      expectedSlots?: string;
+      expectedClarifyAction?: string;
+      expectedAnswer?: string;
+      labelNote?: string;
+      labeledBy?: string;
+      labeledAt?: string;
+      source?: string;
+    }
+
+    /** 标注列表查询参数 */
+    interface SampleListParams {
+      source: string;
+      status: 'pending' | 'labeled';
+      page?: number;
+      size?: number;
+    }
+
+    /** 标注列表响应（data 字段内容） */
+    interface SampleListResponse {
+      list: SampleRow[];
+      total: number;
+      page: number;
+      size: number;
     }
   }
 }

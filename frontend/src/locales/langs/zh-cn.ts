@@ -167,6 +167,7 @@ const local: App.I18n.Schema = {
     'knowledge-base': '知识库',
     'org-tag': '组织标签',
     trace: 'Trace 可观测',
+    eval: '评测管理',
     user: '用户管理',
     'personal-center': '个人中心'
   },

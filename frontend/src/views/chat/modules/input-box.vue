@@ -56,11 +56,19 @@ watch(wsData, val => {
   // 优先处理 error（兼容旧格式 {"error": "..."}）
   if (data.error) {
     assistant.status = 'error';
+    // T1-4: 错误帧也可能携带 traceId
+    if (data.traceId) {
+      assistant.traceId = data.traceId;
+    }
     return;
   }
 
   if (data.type === 'completion' && data.status === 'finished' && assistant.status !== 'error') {
     assistant.status = 'finished';
+    // T1-4: completion 帧回传 traceId，存入消息供 feedback 精准归因
+    if (data.traceId) {
+      assistant.traceId = data.traceId;
+    }
   } else if (data.type === 'tool_call') {
     // 工具调用通知：记录到当前 assistant 消息
     if (!assistant.toolCalls) assistant.toolCalls = [];

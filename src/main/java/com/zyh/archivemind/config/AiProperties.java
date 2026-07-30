@@ -22,6 +22,17 @@ public class AiProperties {
     private Thinking thinking = new Thinking();
     private Intent intent = new Intent();
     private Clarify clarify = new Clarify();
+    private Judge judge = new Judge();
+
+    @Data
+    public static class Judge {
+        private String baseUrl;
+        private String model;
+        private String apiKey;
+        private int timeoutMs = 10000;
+        private int maxTokens = 512;
+        private double temperature = 0;
+    }
 
     @Data
     public static class Rewrite {

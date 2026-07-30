@@ -3,6 +3,8 @@
 import { nextTick } from 'vue';
 import { VueMarkdownIt } from 'vue-markdown-shiki';
 import { formatDate } from '@/utils/common';
+import { submitFeedback } from '@/service/api/feedback';
+import { saveEvalSample } from '@/service/api/eval';
 import ThinkingSection from './thinking-section.vue';
 defineOptions({ name: 'ChatMessage' });
 
@@ -15,7 +17,93 @@ function handleCopy(content: string) {
   window.$message?.success('已复制');
 }
 
+// T1-4: 赞踩反馈
+const feedbackLoading = ref(false);
+const submittedAction = ref<Api.Feedback.Action | null>(null);
+
+async function handleFeedback(action: Api.Feedback.Action) {
+  if (!props.msg.traceId || feedbackLoading.value) return;
+
+  // 如果已提交过相同反馈，不做重复提交
+  if (submittedAction.value === action) return;
+
+  feedbackLoading.value = true;
+  try {
+    const { error } = await submitFeedback({
+      conversationId: props.msg.traceId,
+      traceId: props.msg.traceId,
+      action
+    });
+
+    if (error) {
+      window.$message?.error('反馈提交失败');
+      return;
+    }
+
+    submittedAction.value = action;
+    const labels: Record<Api.Feedback.Action, string> = {
+      LIKE: '已点赞',
+      DISLIKE: '已点踩，将用于改进',
+      PARTIAL_CORRECT: '已标记部分正确',
+      OUTDATED: '已标记内容过时'
+    };
+    window.$message?.success(labels[action]);
+  } catch {
+    window.$message?.error('反馈提交失败');
+  } finally {
+    feedbackLoading.value = false;
+  }
+}
+
+// 反馈按钮是否可用：仅 assistant 消息且已完成/出错，且有 traceId
+const feedbackEnabled = computed(() => {
+  return props.msg.role === 'assistant'
+    && props.msg.traceId
+    && ['finished', 'error'].includes(props.msg.status || '');
+});
+
 const chatStore = useChatStore();
+
+// T1-4 二期: 评测标注弹窗
+const labelModalVisible = ref(false);
+const labelLoading = ref(false);
+const labelForm = reactive({
+  expectedAnswer: '',
+  expectedIntent: '',
+  labelNote: ''
+});
+
+function openLabelModal() {
+  if (!props.msg.traceId) return;
+  labelForm.expectedAnswer = '';
+  labelForm.expectedIntent = '';
+  labelForm.labelNote = '';
+  labelModalVisible.value = true;
+}
+
+async function submitLabel() {
+  if (!labelForm.expectedAnswer.trim()) {
+    window.$message?.warning('期望答案不能为空');
+    return;
+  }
+  labelLoading.value = true;
+  try {
+    const { error } = await saveEvalSample({
+      traceId: props.msg.traceId!,
+      expectedAnswer: labelForm.expectedAnswer,
+      expectedIntent: labelForm.expectedIntent || undefined,
+      labelNote: labelForm.labelNote || undefined
+    });
+    if (error) {
+      window.$message?.error('标注保存失败');
+      return;
+    }
+    window.$message?.success('标注已保存，已加入 gold set');
+    labelModalVisible.value = false;
+  } finally {
+    labelLoading.value = false;
+  }
+}
 
 // 存储文件名和对应的事件处理
 const sourceFiles = ref<Array<{fileName: string, id: string}>>([]);
@@ -175,13 +263,97 @@ async function handleSourceFileClick(fileName: string) {
             <VueMarkdownIt :content="content" />
           </div>
         </div>
-        <div class="mt-1 flex">
+        <div class="mt-1 flex items-center gap-1">
           <NButton quaternary size="tiny" @click="handleCopy(msg.content)">
             <template #icon><icon-mynaui:copy class="text-12px" /></template>
           </NButton>
+          <!-- T1-4: 赞踩反馈按钮 -->
+          <template v-if="feedbackEnabled">
+            <NButton
+              quaternary
+              size="tiny"
+              :type="submittedAction === 'LIKE' ? 'primary' : 'default'"
+              :loading="feedbackLoading"
+              @click="handleFeedback('LIKE')"
+            >
+              <template #icon><icon-mdi:thumb-up-outline class="text-12px" /></template>
+            </NButton>
+            <NButton
+              quaternary
+              size="tiny"
+              :type="submittedAction === 'DISLIKE' ? 'error' : 'default'"
+              :loading="feedbackLoading"
+              @click="handleFeedback('DISLIKE')"
+            >
+              <template #icon><icon-mdi:thumb-down-outline class="text-12px" /></template>
+            </NButton>
+            <NDropdown
+              trigger="click"
+              :options="[
+                { label: '部分正确', key: 'PARTIAL_CORRECT' },
+                { label: '内容过时', key: 'OUTDATED' }
+              ]"
+              @select="handleFeedback"
+            >
+              <NButton quaternary size="tiny">
+                <template #icon><icon-mdi:dots-horizontal class="text-12px" /></template>
+              </NButton>
+            </NDropdown>
+            <!-- T1-4 二期: 标注按钮 -->
+            <NButton quaternary size="tiny" @click="openLabelModal">
+              <template #icon><icon-mdi:label-outline class="text-12px" /></template>
+            </NButton>
+          </template>
         </div>
       </div>
     </div>
+
+    <!-- T1-4 二期: 评测标注弹窗 -->
+    <NModal
+      v-model:show="labelModalVisible"
+      preset="card"
+      title="标注样本"
+      style="width: 560px"
+      :mask-closable="false"
+    >
+      <NForm label-placement="top">
+        <NFormItem label="期望答案（必填）">
+          <NInput
+            v-model:value="labelForm.expectedAnswer"
+            type="textarea"
+            :rows="4"
+            placeholder="标准答案，用于回归评测比对"
+          />
+        </NFormItem>
+        <NFormItem label="期望意图（可选）">
+          <NSelect
+            v-model:value="labelForm.expectedIntent"
+            :options="[
+              { label: 'KNOWLEDGE_QA', value: 'KNOWLEDGE_QA' },
+              { label: 'DOC_OPERATION', value: 'DOC_OPERATION' },
+              { label: 'CHITCHAT', value: 'CHITCHAT' },
+              { label: 'AMBIGUOUS', value: 'AMBIGUOUS' }
+            ]"
+            clearable
+            placeholder="可选"
+          />
+        </NFormItem>
+        <NFormItem label="备注（可选）">
+          <NInput
+            v-model:value="labelForm.labelNote"
+            type="textarea"
+            :rows="2"
+            placeholder="标注说明"
+          />
+        </NFormItem>
+      </NForm>
+      <template #footer>
+        <div class="flex justify-end gap-2">
+          <NButton @click="labelModalVisible = false">取消</NButton>
+          <NButton type="primary" :loading="labelLoading" @click="submitLabel">保存</NButton>
+        </div>
+      </template>
+    </NModal>
   </div>
 </template>
 

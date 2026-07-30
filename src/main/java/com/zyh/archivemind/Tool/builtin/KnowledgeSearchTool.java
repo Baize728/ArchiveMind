@@ -67,16 +67,18 @@ public class KnowledgeSearchTool implements Tool {
             }
 
             // 格式化搜索结果（使用 ObjectMapper 安全序列化，与原 ChatHandler 逻辑一致）
-            List<Map<String, String>> formatted = new ArrayList<>();
+            List<Map<String, Object>> formatted = new ArrayList<>();
             for (int i = 0; i < results.size(); i++) {
                 SearchResult r = results.get(i);
                 String snippet = r.getTextContent();
                 if (snippet.length() > 800) {
                     snippet = snippet.substring(0, 800) + "…";
                 }
-                Map<String, String> item = new LinkedHashMap<>();
+                Map<String, Object> item = new LinkedHashMap<>();
                 item.put("index", String.valueOf(i + 1));
                 item.put("file", r.getFileName() != null ? r.getFileName() : "unknown");
+                item.put("chunkId", r.getChunkId());
+                item.put("fileMd5", r.getFileMd5());
                 item.put("content", snippet);
                 formatted.add(item);
             }

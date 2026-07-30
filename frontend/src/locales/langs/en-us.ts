@@ -167,6 +167,7 @@ const local: App.I18n.Schema = {
     'knowledge-base': 'Knowledge Base',
     'org-tag': 'Organization Tag',
     trace: 'Trace Observability',
+    eval: 'Evaluation',
     user: 'User Management',
     'personal-center': 'Personal Center'
   },

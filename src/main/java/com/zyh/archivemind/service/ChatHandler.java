@@ -126,9 +126,10 @@ public class ChatHandler {
         } catch (Exception e) {
             logger.error("处理消息错误: {}", e.getMessage(), e);
             TraceScope scope = traceScopeRef.get();
+            String traceId = scope.getTraceId();
             scope.recordError(e.getMessage());
             scope.close();
-            handleError(session, e, conversationId, userId, userMessage);
+            handleError(session, e, conversationId, userId, userMessage, traceId);
             cleanupSession(session.getId());
             CompletableFuture<String> future = responseFutures.remove(session.getId());
             if (future != null && !future.isDone()) future.completeExceptionally(e);
@@ -272,16 +273,18 @@ public class ChatHandler {
             public void onComplete() {
                 TraceScope scope = traceScopeRef.get();
                 scope.recordAgentDuration(System.currentTimeMillis() - agentStartTime);
+                String traceId = scope.getTraceId();
                 scope.close();
-                finishResponse(session, convId, userId, userMessage, responseFuture);
+                finishResponse(session, convId, userId, userMessage, responseFuture, traceId);
             }
 
             @Override
             public void onError(Throwable error) {
                 TraceScope scope = traceScopeRef.get();
+                String traceId = scope.getTraceId();
                 scope.recordError(error.getMessage());
                 scope.close();
-                handleError(session, error, convId, userId, userMessage);
+                handleError(session, error, convId, userId, userMessage, traceId);
                 responseFuture.completeExceptionally(error);
                 cleanupSession(session.getId());
                 responseFutures.remove(session.getId());
@@ -394,13 +397,15 @@ public class ChatHandler {
             sendAnswerChunk(session, reply);  // 同步返回（Q7）
 
             traceScope.recordAgentDuration(System.currentTimeMillis() - startTime);
+            String traceId = traceScope.getTraceId();
             traceScope.close();
-            finishResponse(session, convId, userId, userMessage, responseFuture);
+            finishResponse(session, convId, userId, userMessage, responseFuture, traceId);
         } catch (Exception e) {
             logger.error("澄清追问处理失败: {}", e.getMessage(), e);
+            String traceId = traceScope.getTraceId();
             traceScope.recordError(e.getMessage());
             traceScope.close();
-            handleError(session, e, convId, userId, userMessage);
+            handleError(session, e, convId, userId, userMessage, traceId);
             cleanupSession(session.getId());
             responseFutures.remove(session.getId());
         }
@@ -456,13 +461,15 @@ public class ChatHandler {
             sendAnswerChunk(session, reply);
 
             traceScope.recordAgentDuration(System.currentTimeMillis() - startTime);
+            String traceId = traceScope.getTraceId();
             traceScope.close();
-            finishResponse(session, convId, userId, userMessage, responseFuture);
+            finishResponse(session, convId, userId, userMessage, responseFuture, traceId);
         } catch (Exception e) {
             logger.error("闲聊处理失败: {}", e.getMessage(), e);
+            String traceId = traceScope.getTraceId();
             traceScope.recordError(e.getMessage());
             traceScope.close();
-            handleError(session, e, convId, userId, userMessage);
+            handleError(session, e, convId, userId, userMessage, traceId);
             cleanupSession(session.getId());
             responseFutures.remove(session.getId());
         }
@@ -484,13 +491,15 @@ public class ChatHandler {
             sendAnswerChunk(session, reply);
 
             traceScope.recordAgentDuration(System.currentTimeMillis() - startTime);
+            String traceId = traceScope.getTraceId();
             traceScope.close();
-            finishResponse(session, convId, userId, userMessage, responseFuture);
+            finishResponse(session, convId, userId, userMessage, responseFuture, traceId);
         } catch (Exception e) {
             logger.error("模糊意图处理失败: {}", e.getMessage(), e);
+            String traceId = traceScope.getTraceId();
             traceScope.recordError(e.getMessage());
             traceScope.close();
-            handleError(session, e, convId, userId, userMessage);
+            handleError(session, e, convId, userId, userMessage, traceId);
             cleanupSession(session.getId());
             responseFutures.remove(session.getId());
         }
@@ -501,7 +510,7 @@ public class ChatHandler {
      */
     private void finishResponse(WebSocketSession session, String conversationId,
                                 String userId, String userMessage,
-                                CompletableFuture<String> responseFuture) {
+                                CompletableFuture<String> responseFuture, String traceId) {
         StringBuilder builder = responseBuilders.get(session.getId());
         StringBuilder thinkingBuilder = thinkingBuilders.get(session.getId());
 
@@ -518,7 +527,7 @@ public class ChatHandler {
             logger.warn("刷新会话TTL失败: {}", e.getMessage());
         }
 
-        sendCompletionNotification(session);
+        sendCompletionNotification(session, traceId);
         cleanupSession(session.getId());
         responseFutures.remove(session.getId());
         responseFuture.complete(completeResponse);
@@ -619,14 +628,14 @@ public class ChatHandler {
         }
     }
 
-    private void sendCompletionNotification(WebSocketSession session) {
+    private void sendCompletionNotification(WebSocketSession session, String traceId) {
         try {
-            Map<String, Object> notification = Map.of(
-                    "type", "completion",
-                    "status", "finished",
-                    "message", "响应已完成",
-                    "timestamp", System.currentTimeMillis()
-            );
+            Map<String, Object> notification = new LinkedHashMap<>();
+            notification.put("type", "completion");
+            notification.put("status", "finished");
+            notification.put("message", "响应已完成");
+            notification.put("timestamp", System.currentTimeMillis());
+            notification.put("traceId", traceId);
             session.sendMessage(new TextMessage(objectMapper.writeValueAsString(notification)));
         } catch (Exception e) {
             logger.error("发送完成通知失败: {}", e.getMessage(), e);
@@ -634,12 +643,15 @@ public class ChatHandler {
     }
 
     private void handleError(WebSocketSession session, Throwable error,
-                             String conversationId, String userId, String userMessage) {
+                             String conversationId, String userId, String userMessage,
+                             String traceId) {
         logger.error("AI服务错误: {}", error.getMessage(), error);
         String fallbackReply = "AI服务暂时不可用，请稍后重试";
         try {
-            String json = objectMapper.writeValueAsString(Map.of("error", fallbackReply));
-            session.sendMessage(new TextMessage(json));
+            Map<String, Object> errorFrame = new LinkedHashMap<>();
+            errorFrame.put("error", fallbackReply);
+            errorFrame.put("traceId", traceId);
+            session.sendMessage(new TextMessage(objectMapper.writeValueAsString(errorFrame)));
         } catch (Exception e) {
             logger.error("发送错误消息失败: {}", e.getMessage(), e);
         }

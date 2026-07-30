@@ -63,6 +63,18 @@ export const generatedRoutes: GeneratedRoute[] = [
     }
   },
   {
+    name: 'eval',
+    path: '/eval',
+    component: 'layout.base$view.eval',
+    meta: {
+      title: 'eval',
+      i18nKey: 'route.eval',
+      icon: 'solar:clipboard-check-line-duotone',
+      roles: ['ADMIN'],
+      order: 8
+    }
+  },
+  {
     name: 'iframe-page',
     path: '/iframe-page/:url',
     component: 'layout.base$view.iframe-page',

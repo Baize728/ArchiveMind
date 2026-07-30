@@ -67,6 +67,10 @@ public class SecurityConfig {
                             .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
                             // Trace 可观测（仅管理员）
                             .requestMatchers("/api/v1/traces/**").hasRole("ADMIN")
+                            // 评测管理（仅管理员）
+                            .requestMatchers("/api/v1/eval/**").hasRole("ADMIN")
+                            // 反馈采集（已登录用户均可）
+                            .requestMatchers("/api/v1/feedback").hasAnyRole("USER", "ADMIN")
                             // 用户组织标签管理接口
                             .requestMatchers("/api/v1/users/primary-org").hasAnyRole("USER", "ADMIN")
                             // 其他请求需要认证

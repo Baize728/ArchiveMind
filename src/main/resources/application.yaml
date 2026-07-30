@@ -88,6 +88,8 @@ spring:
     topic:
       file-processing: ${KAFKA_TOPIC_FILE_PROCESSING:file-processing}
       dlt: ${KAFKA_TOPIC_DLT:file-processing-dlt}
+      eval-badcase-feedback: ${KAFKA_TOPIC_EVAL_BADCASE:eval-badcase-feedback}
+      eval-badcase-feedback-dlt: ${KAFKA_TOPIC_EVAL_BADCASE_DLT:eval-badcase-feedback-dlt}
 
 # ---------------- Elasticsearch ----------------
 elasticsearch:
@@ -204,6 +206,13 @@ ai:
     domain-required-other-score-threshold: ${AI_CLARIFY_DOMAIN_THRESHOLD:3}
   orchestrator:
     enabled: ${AI_ORCHESTRATOR_ENABLED:false}
+  judge:
+    base-url: ${AI_JUDGE_BASE_URL:https://api.deepseek.com/v1}
+    model: ${AI_JUDGE_MODEL:deepseek-chat}
+    api-key: ${AI_JUDGE_API_KEY:}
+    timeout-ms: ${AI_JUDGE_TIMEOUT_MS:10000}
+    max-tokens: ${AI_JUDGE_MAX_TOKENS:512}
+    temperature: ${AI_JUDGE_TEMPERATURE:0}
 
 # ---------------- Trace 采集 ----------------
 trace:
@@ -213,6 +222,30 @@ trace:
   flush-interval-ms: ${TRACE_FLUSH_INTERVAL:500}
   mask-sensitive: ${TRACE_MASK_SENSITIVE:true}
   max-payload-length: ${TRACE_MAX_PAYLOAD:8192}
+
+# ---------------- T1-4 Eval 反馈闭环 ----------------
+eval:
+  weights:
+    rule: ${EVAL_WEIGHT_RULE:0.5}
+    judge: ${EVAL_WEIGHT_JUDGE:0.3}
+    feedback: ${EVAL_WEIGHT_FEEDBACK:0.2}
+  judge:
+    weights:
+      faithfulness: ${EVAL_JUDGE_W_FAITH:0.4}
+      relevance: ${EVAL_JUDGE_W_RELEV:0.3}
+      completeness: ${EVAL_JUDGE_W_COMP:0.2}
+      naturalness: ${EVAL_JUDGE_W_NAT:0.1}
+      faithfulness-with-correctness: ${EVAL_JUDGE_W_FAITH_CORR:0.35}
+      relevance-with-correctness: ${EVAL_JUDGE_W_RELEV_CORR:0.25}
+      completeness-with-correctness: ${EVAL_JUDGE_W_COMP_CORR:0.15}
+      correctness: ${EVAL_JUDGE_W_CORR:0.15}
+      naturalness-with-correctness: ${EVAL_JUDGE_W_NAT_CORR:0.10}
+  regression:
+    sample-size: ${EVAL_REGRESSION_SAMPLE_SIZE:100}
+    pass-threshold: ${EVAL_REGRESSION_PASS_THRESHOLD:80}
+    baseline-degradation: ${EVAL_REGRESSION_BASELINE_DEGRADATION:3}
+  task:
+    retention-hours: ${EVAL_TASK_RETENTION_HOURS:24}
 
 # ---------------- 日志级别 ----------------
 logging:
