@@ -194,6 +194,14 @@ ai:
       chitchat: ["你好","在吗","谢谢","再见","你是谁","你是AI"]
       doc_operation: ["归档","上传文档","删除文档","移动文档","重命名"]
       knowledge_qa: ["查询","检索","什么是","怎么","为什么","政策","规定","流程"]
+  clarify:
+    enabled: ${AI_CLARIFY_ENABLED:true}
+    base-url: ${AI_CLARIFY_BASE_URL:https://api.deepseek.com/v1}
+    api-key: ${AI_CLARIFY_API_KEY:}
+    model: ${AI_CLARIFY_MODEL:deepseek-chat}
+    timeout-ms: ${AI_CLARIFY_TIMEOUT_MS:3000}
+    max-clarify-turns: ${AI_CLARIFY_MAX_TURNS:2}
+    domain-required-other-score-threshold: ${AI_CLARIFY_DOMAIN_THRESHOLD:3}
   orchestrator:
     enabled: ${AI_ORCHESTRATOR_ENABLED:false}
 

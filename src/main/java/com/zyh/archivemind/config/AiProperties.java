@@ -21,6 +21,7 @@ public class AiProperties {
     private Rewrite rewrite = new Rewrite();
     private Thinking thinking = new Thinking();
     private Intent intent = new Intent();
+    private Clarify clarify = new Clarify();
 
     @Data
     public static class Rewrite {
@@ -34,8 +35,11 @@ public class AiProperties {
         private String model;
         /** 改写 system prompt */
         private String systemPrompt = "你是一个查询改写助手。根据多轮对话历史，将用户最新的问题改写为一个语义完整、可独立理解的检索查询。"
-                + "要求：1) 补全省略的主语和上下文；2) 保留用户的核心意图；3) 只输出改写后的查询，不要输出任何解释。"
-                + "如果当前问题已经语义完整，直接原样输出即可。";
+                + "要求：\n"
+                + "1) 仅消解指代词（他/她/它/这/那/这个/那个/那块）和省略，把指代替换为历史中**明确出现过的**具体对象；"
+                + "2) 严禁脑补历史中**没有出现**的具体名词，特别是业务域（财务/人事/法务/技术）、文档名、实体对象；"
+                + "3) 如果对话历史为空，或历史中找不到明确的指代对象，**原样输出当前问题**，不要做任何改写；"
+                + "4) 只输出改写后的查询，不要输出任何解释。";
         /** 历史对话最大轮数（一轮 = 一问一答） */
         private int maxHistoryRounds = 3;
         /** 同步调用超时时间（秒） */
@@ -93,5 +97,25 @@ public class AiProperties {
                 + "不要寒暄，不要回答用户问题，不要输出任何解释。";
         /** 关键词表，intent 名 -> 关键词列表 */
         private Map<String, List<String>> keywords = new HashMap<>();
+    }
+
+    @Data
+    public static class Clarify {
+        /** 是否启用澄清追问层 */
+        private boolean enabled = true;
+        /** 澄清层 LLM API 地址 */
+        private String baseUrl;
+        /** 澄清层 LLM API Key */
+        private String apiKey;
+        /** 澄清层 LLM 模型名称 */
+        private String model;
+        /** 同步调用超时时间（毫秒） */
+        private int timeoutMs = 3000;
+        /** 澄清轮次上限（Q6） */
+        private int maxClarifyTurns = 2;
+        /** domain 条件必填阈值（Q12） */
+        private int domainRequiredOtherScoreThreshold = 3;
+        /** 超限放行免责声明（Q6） */
+        private String exhaustedDisclaimer = "基于您当前的描述，我检索到以下内容，如不准确请补充更多信息。";
     }
 }

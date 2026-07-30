@@ -1,0 +1,7 @@
+# domain 别名映射（T1-2，Q8/Q23）
+# DomainAliasMatcher 加载此文件，被 IntentReviseService（升格判定）和 SlotExtractor（槽位抽取）共用
+aliases:
+  finance: [报销, 财务, 费用, 预算, 差旅, 发票, 付款]
+  hr: [人事, 人资, 员工, 考勤, 薪资, 年假, 招聘, 绩效]
+  legal: [法务, 合同, 合规, 诉讼, 知识产权, 法律]
+  it: [技术, 系统, 网络, 服务器, 数据库, 运维]

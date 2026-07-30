@@ -100,6 +100,40 @@ public class TraceScope implements AutoCloseable {
                 userMessage, payload, 0, true);
     }
 
+    /**
+     * 记录 Query 改写结果（T1-2 前置改写）。
+     * @param originalQuery  原始 query
+     * @param rewrittenQuery 改写后 query（可能与原 query 相同）
+     * @param latencyMs      LLM 调用耗时
+     */
+    public void recordQueryRewrite(String originalQuery, String rewrittenQuery, long latencyMs) {
+        String payload = String.format(
+                "{\"rewritten\":\"%s\",\"changed\":%s}",
+                rewrittenQuery, !originalQuery.equals(rewrittenQuery));
+        add(TraceEvent.EventType.QUERY_REWRITE, TraceEvent.Phase.REWRITE, null,
+                originalQuery, payload, latencyMs, true);
+    }
+
+    /**
+     * 记录澄清追问决策（T1-2）。
+     * @param userMessage    用户输入
+     * @param slotsJson      抽取+合并后的槽位 JSON
+     * @param missingSlots   缺失槽位列表
+     * @param action         ASK / READY
+     * @param questionToAsk  LLM 生成的追问文案（READY 时为 null）
+     * @param latencyMs      LLM 调用耗时
+     */
+    public void recordClarify(String userMessage, String slotsJson,
+                              String missingSlots, String action, String questionToAsk,
+                              long latencyMs) {
+        String safeQuestion = questionToAsk == null ? "" : questionToAsk.replace("\"", "\\\"");
+        String payload = String.format(
+                "{\"slots\":%s,\"missing\":%s,\"action\":\"%s\",\"question\":\"%s\"}",
+                slotsJson, missingSlots, action, safeQuestion);
+        add(TraceEvent.EventType.CLARIFY, TraceEvent.Phase.CLARIFY, null,
+                userMessage, payload, latencyMs, true);
+    }
+
     private void add(TraceEvent.EventType type, TraceEvent.Phase phase, String model,
                      String input, String output, long latencyMs, boolean success) {
         if (noop) {

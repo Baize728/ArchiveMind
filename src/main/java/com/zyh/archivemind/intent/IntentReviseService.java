@@ -1,6 +1,8 @@
 package com.zyh.archivemind.intent;
 
+import com.zyh.archivemind.common.DomainAliasMatcher;
 import com.zyh.archivemind.config.AiProperties;
+import com.zyh.archivemind.model.SessionState;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -14,27 +16,31 @@ import java.util.Map;
  * - LLM 返回 null → 兜底 AMBIGUOUS(0.2, KEYWORD)
  * - 命中强制关键词 → 覆盖意图（source=RULE）
  * - 低置信度（<0.4）→ 降级 AMBIGUOUS（source=RULE）
+ * - Q11 升格：lastIntent==AMBIGUOUS + 命中 domain 别名 → 升格 KNOWLEDGE_QA（T1-2）
  *
- * 与 Diet 的差异：Diet 的 revise 依赖 SessionState（判断有无上轮推荐）。
- * ArchiveMind 一期不引入 SessionState，规则只看 userInput + confidence。
+ * T1-2 改动（Q16）：revise 签名加 SessionState，读 state.lastIntent 做升格判定。
+ * IntentAgentService 保持无状态（不接收 state）。
  */
 @Service
 public class IntentReviseService {
 
     private final AiProperties aiProperties;
+    private final DomainAliasMatcher domainAliasMatcher;
 
-    public IntentReviseService(AiProperties aiProperties) {
+    public IntentReviseService(AiProperties aiProperties, DomainAliasMatcher domainAliasMatcher) {
         this.aiProperties = aiProperties;
+        this.domainAliasMatcher = domainAliasMatcher;
     }
 
     /**
-     * 规则矫正 LLM 输出。
+     * 规则矫正 LLM 输出（T1-2 带 state 版本，Q16）。
      *
      * @param llmResult   LLM 层返回的结果（可为 null）
-     * @param userInput   用户原始输入（用于关键词匹配）
+     * @param userInput   用户输入（用于关键词匹配和升格判定）
+     * @param state       会话状态（读 lastIntent 做 Q11 升格判定；可为 null）
      * @return 矫正后的 IntentResult
      */
-    public IntentResult revise(IntentResult llmResult, String userInput) {
+    public IntentResult revise(IntentResult llmResult, String userInput, SessionState state) {
         // LLM 完全失败时，先尝试关键词兜底；无关键词命中才返回 AMBIGUOUS
         if (llmResult == null) {
             Intent forced = matchForcedKeyword(userInput);
@@ -50,7 +56,18 @@ public class IntentReviseService {
             return new IntentResult(forced, llmResult.confidence(), "RULE", llmResult.rawReply());
         }
 
-        // 规则二：低置信度 → 降级 AMBIGUOUS
+        // 规则二：Q11 升格判定（T1-2，Q23 修正：只用 domain 别名）
+        // 上一轮 AMBIGUOUS + 本轮 LLM 仍判 AMBIGUOUS + 命中 domain 别名 → 升格 KNOWLEDGE_QA
+        if (llmResult.intent() == Intent.AMBIGUOUS
+                && state != null
+                && state.lastIntent() == Intent.AMBIGUOUS) {
+            var domain = domainAliasMatcher.match(userInput);
+            if (domain.isPresent()) {
+                return new IntentResult(Intent.KNOWLEDGE_QA, 0.6, "RULE", llmResult.rawReply());
+            }
+        }
+
+        // 规则三：低置信度 → 降级 AMBIGUOUS
         double threshold = aiProperties.getIntent().getAmbiguousThreshold();
         if (llmResult.confidence() < threshold) {
             return new IntentResult(Intent.AMBIGUOUS, llmResult.confidence(), "RULE", llmResult.rawReply());
@@ -58,6 +75,13 @@ public class IntentReviseService {
 
         // 无矫正规则命中，保留 LLM 结果
         return llmResult;
+    }
+
+    /**
+     * 兼容 T1-1 旧签名（无 state）——内部传 null，不触发升格判定。
+     */
+    public IntentResult revise(IntentResult llmResult, String userInput) {
+        return revise(llmResult, userInput, null);
     }
 
     /**

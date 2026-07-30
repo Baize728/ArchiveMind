@@ -1,0 +1,7 @@
+# 候选值字典（T1-2，Q5）
+# SlotExtractor LLM fallback 时约束 LLM 只能取候选值或 null
+options:
+  domain: [finance, hr, legal, it]
+  docScope: [合同模板, 报销制度, 员工手册, 安全规范, 数据标准]
+  timeRange: [latest, 2024, 2023, 2022]
+  entity: []

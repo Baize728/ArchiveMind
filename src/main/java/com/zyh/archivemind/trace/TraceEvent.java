@@ -24,13 +24,15 @@ public class TraceEvent {
         TOOL_CALL,          // 工具调用
         AGENT_DURATION,     // Agent 总执行耗时（T1-1 替代 AGENT_START + AGENT_COMPLETE）
         INTENT_RECOGNIZED,  // 意图识别（T1-1）
+        QUERY_REWRITE,      // Query 改写（T1-2）
+        CLARIFY,            // 澄清追问（T1-2）
         LEGACY,             // 历史废弃事件类型（AGENT_START/AGENT_COMPLETE 等）的兼容降级
         ERROR               // 出错
     }
 
     /** 阶段（对齐 Diet-Agent phase：INPUT/AGENT/LLM/TOOL/ERROR） */
     public enum Phase {
-        INPUT, AGENT, LLM, TOOL, INTENT, ERROR
+        INPUT, AGENT, LLM, TOOL, INTENT, REWRITE, CLARIFY, ERROR
     }
 
     private String traceId;
