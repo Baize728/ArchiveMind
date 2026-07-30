@@ -21,6 +21,7 @@ public class AiProperties {
     private Rewrite rewrite = new Rewrite();
     private Thinking thinking = new Thinking();
     private Intent intent = new Intent();
+    private Clarify clarify = new Clarify();
 
     @Data
     public static class Rewrite {
@@ -93,5 +94,25 @@ public class AiProperties {
                 + "不要寒暄，不要回答用户问题，不要输出任何解释。";
         /** 关键词表，intent 名 -> 关键词列表 */
         private Map<String, List<String>> keywords = new HashMap<>();
+    }
+
+    @Data
+    public static class Clarify {
+        /** 是否启用澄清追问层 */
+        private boolean enabled = true;
+        /** 澄清层 LLM API 地址 */
+        private String baseUrl;
+        /** 澄清层 LLM API Key */
+        private String apiKey;
+        /** 澄清层 LLM 模型名称 */
+        private String model;
+        /** 同步调用超时时间（毫秒） */
+        private int timeoutMs = 3000;
+        /** 澄清轮次上限（Q6） */
+        private int maxClarifyTurns = 2;
+        /** domain 条件必填阈值（Q12） */
+        private int domainRequiredOtherScoreThreshold = 3;
+        /** 超限放行免责声明（Q6） */
+        private String exhaustedDisclaimer = "基于您当前的描述，我检索到以下内容，如不准确请补充更多信息。";
     }
 }

@@ -189,6 +189,8 @@ function eventTypeTag(eventType: string): { type: 'success' | 'info' | 'warning'
     TOOL_CALL: { type: 'warning', label: 'tool' },
     AGENT_DURATION: { type: 'success', label: '完成' },
     INTENT_RECOGNIZED: { type: 'info', label: '意图识别' },
+    QUERY_REWRITE: { type: 'info', label: '改写' },
+    CLARIFY: { type: 'warning', label: '澄清' },
     LEGACY: { type: 'default', label: '历史' },
     ERROR: { type: 'error', label: '错误' }
     };

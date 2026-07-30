@@ -16,6 +16,7 @@ import java.lang.reflect.Field;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -44,12 +45,24 @@ class ChatHandlerCleanupTest {
     @SuppressWarnings("unchecked")
     @BeforeEach
     void setUp() throws Exception {
+        QueryRewriteService queryRewriteService = mock(QueryRewriteService.class);
+        lenient().when(queryRewriteService.rewrite(any(), any())).thenAnswer(inv -> inv.getArgument(0));
+        com.zyh.archivemind.clarify.SessionStateService sessionStateService =
+                mock(com.zyh.archivemind.clarify.SessionStateService.class);
+        lenient().when(sessionStateService.get(any()))
+                .thenReturn(com.zyh.archivemind.model.SessionState.fresh());
+
         chatHandler = new ChatHandler(redisTemplate, conversationSessionService,
                 preferenceService, agentExecutor, new AiProperties(), traceCollector,
-                intentRouter, intentLlmClient);
+                intentRouter, intentLlmClient,
+                queryRewriteService,
+                sessionStateService,
+                mock(com.zyh.archivemind.clarify.SlotExtractor.class),
+                mock(com.zyh.archivemind.clarify.ClarifyRuleService.class),
+                mock(com.zyh.archivemind.clarify.ClarifyAgentService.class));
 
-        // 默认意图为 KNOWLEDGE_QA，走 AgentExecutor 路径
-        lenient().when(intentRouter.route(any(), any()))
+        // 默认意图为 KNOWLEDGE_QA，走 AgentExecutor 路径（三参数版本）
+        lenient().when(intentRouter.route(any(), any(), any()))
                 .thenReturn(new com.zyh.archivemind.intent.IntentResult(
                         com.zyh.archivemind.intent.Intent.KNOWLEDGE_QA, 0.9, "LLM", ""));
 

@@ -13,6 +13,8 @@ import com.zyh.archivemind.agent.AgentExecutor;
 import com.zyh.archivemind.intent.Intent;
 import com.zyh.archivemind.intent.IntentResult;
 import com.zyh.archivemind.intent.IntentRouter;
+import com.zyh.archivemind.clarify.*;
+import com.zyh.archivemind.model.SessionState;
 import com.zyh.archivemind.trace.TraceCollector;
 import com.zyh.archivemind.trace.TraceScope;
 import com.zyh.archivemind.config.AiProperties;
@@ -34,6 +36,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * 聊天处理服务
@@ -53,12 +56,21 @@ public class ChatHandler {
     private final TraceCollector traceCollector;
     private final IntentRouter intentRouter;
     private final com.zyh.archivemind.client.IntentLlmClient intentLlmClient;
+    // T1-2 新增依赖
+    private final QueryRewriteService queryRewriteService;
+    private final SessionStateService sessionStateService;
+    private final SlotExtractor slotExtractor;
+    private final ClarifyRuleService clarifyRuleService;
+    private final ClarifyAgentService clarifyAgentService;
 
     private final Map<String, StringBuilder> responseBuilders = new ConcurrentHashMap<>();
     private final Map<String, StringBuilder> thinkingBuilders = new ConcurrentHashMap<>();
     private final Map<String, CompletableFuture<String>> responseFutures = new ConcurrentHashMap<>();
     private final Map<String, Boolean> stopFlags = new ConcurrentHashMap<>();
     private final Map<String, Long> sessionStartTimes = new ConcurrentHashMap<>();
+    /** Q9 并发控制：按 conversationId 串行化整个意图识别+澄清+检索流程 */
+    private final Map<String, ReentrantLock> conversationLocks = new ConcurrentHashMap<>();
+
     /** 用于延迟清理 stopFlag */
     private final java.util.concurrent.ScheduledExecutorService toolCleanupExecutor =
             java.util.concurrent.Executors.newSingleThreadScheduledExecutor(
@@ -71,7 +83,12 @@ public class ChatHandler {
                        AiProperties aiProperties,
                        TraceCollector traceCollector,
                        IntentRouter intentRouter,
-                       com.zyh.archivemind.client.IntentLlmClient intentLlmClient) {
+                       com.zyh.archivemind.client.IntentLlmClient intentLlmClient,
+                       QueryRewriteService queryRewriteService,
+                       SessionStateService sessionStateService,
+                       SlotExtractor slotExtractor,
+                       ClarifyRuleService clarifyRuleService,
+                       ClarifyAgentService clarifyAgentService) {
         this.redisTemplate = redisTemplate;
         this.conversationSessionService = conversationSessionService;
         this.preferenceService = preferenceService;
@@ -81,6 +98,11 @@ public class ChatHandler {
         this.traceCollector = traceCollector;
         this.intentRouter = intentRouter;
         this.intentLlmClient = intentLlmClient;
+        this.queryRewriteService = queryRewriteService;
+        this.sessionStateService = sessionStateService;
+        this.slotExtractor = slotExtractor;
+        this.clarifyRuleService = clarifyRuleService;
+        this.clarifyAgentService = clarifyAgentService;
     }
 
     public void processMessage(String userId, String userMessage, WebSocketSession session) {
@@ -91,121 +113,15 @@ public class ChatHandler {
         final AtomicReference<TraceScope> traceScopeRef = new AtomicReference<>(TraceScope.noop());
         try {
             conversationId = getOrCreateConversationId(userId);
-            final String convId = conversationId;
-            responseBuilders.put(session.getId(), new StringBuilder());
-            thinkingBuilders.put(session.getId(), new StringBuilder());
-            sessionStartTimes.put(session.getId(), System.currentTimeMillis());
-            CompletableFuture<String> responseFuture = new CompletableFuture<>();
-            responseFutures.put(session.getId(), responseFuture);
 
-            // 开启 Trace：在线对话默认落库（受 trace.online-persist / sampling 控制）
-            TraceScope traceScope = traceCollector.openTrace(conversationId, userId, session.getId(), false);
-            traceScopeRef.set(traceScope);
-            traceScope.recordUserInput(userMessage);
-
-            // 记录 Agent 开始时间，用于 onComplete 时算总耗时
-            final long agentStartTime = System.currentTimeMillis();
-
-            List<Map<String, String>> history = getConversationHistory(conversationId);
-
-            if (history.isEmpty()) {
-                try {
-                    conversationSessionService.autoGenerateTitle(conversationId, userMessage);
-                } catch (Exception e) {
-                    logger.warn("自动生成标题失败，会话ID: {}, 错误: {}", conversationId, e.getMessage());
-                }
+            // Q9 并发控制：按 conversationId 串行化整个流程
+            ReentrantLock lock = conversationLocks.computeIfAbsent(conversationId, k -> new ReentrantLock());
+            lock.lock();
+            try {
+                processMessageInternal(userId, userMessage, session, conversationId, traceScopeRef);
+            } finally {
+                lock.unlock();
             }
-
-            // 构建 LlmMessage 列表（system prompt + 历史 + 当前问题）
-            List<LlmMessage> messages = buildLlmMessages(userMessage, history);
-
-            // ========== T1-1 意图识别与路由 ==========
-            IntentResult intentResult = intentRouter.route(userMessage, history);
-            traceScope.recordIntent(userMessage, intentResult.intent().name(),
-                    intentResult.confidence(), intentResult.source());
-
-            switch (intentResult.intent()) {
-                case CHITCHAT -> {
-                    handleChitchat(userMessage, session, convId, userId, traceScope, responseFuture);
-                    return;
-                }
-                case AMBIGUOUS -> {
-                    handleAmbiguous(session, convId, userId, userMessage, traceScope, responseFuture);
-                    return;
-                }
-                case KNOWLEDGE_QA, DOC_OPERATION -> {
-                    // 落到下方原有 agentExecutor.execute 路径
-                    // DOC_OPERATION 一期仅 trace 标记差异，不另起链路
-                }
-            }
-            // ========== 原 AgentExecutor 路径 ==========
-
-            // 获取用户偏好的 LLM Provider
-            LlmProvider provider = preferenceService.getProviderForUser(userId);
-
-            // 构建 Agent 配置
-            AgentConfig config = AgentConfig.builder()
-                    .maxIterations(5)
-                    .build();
-
-            // 构建 Agent 上下文
-            Tool.ToolContext toolContext = new Tool.ToolContext(userId, session.getId(), conversationId);
-
-            AgentContext agentContext = AgentContext.builder()
-                    .toolContext(toolContext)
-                    .messages(messages)
-                    .build();
-            // 显式透传 TraceScope 给 Agent 循环（跨 Reactor / toolExecutor 线程共享同一引用）
-            agentContext.setTraceScope(traceScope);
-
-            // 执行 Agent，通过回调桥接 WebSocket
-            agentExecutor.execute(provider, config, agentContext, new AgentCallback() {
-                @Override
-                public void onThinkingChunk(String chunk) {
-                    if (Boolean.TRUE.equals(stopFlags.get(session.getId()))) return;
-                    StringBuilder builder = thinkingBuilders.get(session.getId());
-                    if (builder != null) builder.append(chunk);
-                    sendThinkingChunk(session, chunk);
-                }
-
-                @Override
-                public void onTextChunk(String chunk) {
-                    if (Boolean.TRUE.equals(stopFlags.get(session.getId()))) return;
-                    StringBuilder builder = responseBuilders.get(session.getId());
-                    if (builder != null) builder.append(chunk);
-                    sendAnswerChunk(session, chunk);
-                }
-
-                @Override
-                public void onToolCallStart(ToolCall toolCall) {
-                    sendToolCallNotification(session, toolCall, "executing");
-                }
-
-                @Override
-                public void onToolCallEnd(ToolCall toolCall, Tool.ToolResult result) {
-                    sendToolCallNotification(session, toolCall,
-                            result.success() ? "done" : "failed");
-                }
-
-                @Override
-                public void onComplete() {
-                    TraceScope scope = traceScopeRef.get();
-                    scope.recordAgentDuration(System.currentTimeMillis() - agentStartTime);
-                    scope.close();
-                    finishResponse(session, convId, userId, userMessage, responseFuture);
-                }
-
-                @Override
-                public void onError(Throwable error) {
-                    TraceScope scope = traceScopeRef.get();
-                    scope.recordError(error.getMessage());
-                    scope.close();
-                    handleError(session, error, convId, userId, userMessage);
-                    responseFuture.completeExceptionally(error);
-                    cleanupSession(session.getId());
-                    responseFutures.remove(session.getId());
-                }
-            });
 
         } catch (Exception e) {
             logger.error("处理消息错误: {}", e.getMessage(), e);
@@ -216,6 +132,277 @@ public class ChatHandler {
             cleanupSession(session.getId());
             CompletableFuture<String> future = responseFutures.remove(session.getId());
             if (future != null && !future.isDone()) future.completeExceptionally(e);
+        }
+    }
+
+    /**
+     * 消息处理内部逻辑（在并发锁内执行，T1-2 改造）。
+     */
+    private void processMessageInternal(String userId, String userMessage, WebSocketSession session,
+                                         String conversationId,
+                                         AtomicReference<TraceScope> traceScopeRef) {
+        final String convId = conversationId;
+        responseBuilders.put(session.getId(), new StringBuilder());
+        thinkingBuilders.put(session.getId(), new StringBuilder());
+        sessionStartTimes.put(session.getId(), System.currentTimeMillis());
+        CompletableFuture<String> responseFuture = new CompletableFuture<>();
+        responseFutures.put(session.getId(), responseFuture);
+
+        // 开启 Trace
+        TraceScope traceScope = traceCollector.openTrace(conversationId, userId, session.getId(), false);
+        traceScopeRef.set(traceScope);
+        traceScope.recordUserInput(userMessage);
+
+        final long agentStartTime = System.currentTimeMillis();
+
+        List<Map<String, String>> history = getConversationHistory(conversationId);
+
+        if (history.isEmpty()) {
+            try {
+                conversationSessionService.autoGenerateTitle(conversationId, userMessage);
+            } catch (Exception e) {
+                logger.warn("自动生成标题失败，会话ID: {}, 错误: {}", conversationId, e.getMessage());
+            }
+        }
+
+        // ========== T1-2 1. 读取 SessionState（Q16 方案 A）==========
+        SessionState state = sessionStateService.get(conversationId);
+
+        // ========== T1-2 2. QueryRewrite（所有意图前置，ADR-012）==========
+        long rewriteStart = System.currentTimeMillis();
+        String rewrittenQuery = queryRewriteService.rewrite(userMessage, history);
+        long rewriteLatency = System.currentTimeMillis() - rewriteStart;
+        // 记录 trace（无历史时 rewriteService 内部直接返回原 query，不调 LLM，latency~0）
+        traceScope.recordQueryRewrite(userMessage, rewrittenQuery, rewriteLatency);
+
+        // ========== T1-2 3. 意图识别（用改写后的 query）==========
+        IntentResult intentResult = intentRouter.route(rewrittenQuery, history, state);
+        traceScope.recordIntent(rewrittenQuery, intentResult.intent().name(),
+                intentResult.confidence(), intentResult.source());
+
+        // 统一写入 lastIntent（Q21）
+        state = state.withLastIntent(intentResult.intent());
+        sessionStateService.update(conversationId, state);
+
+        // Q18：换话题重置（上一轮 KNOWLEDGE_QA 且本轮不是 → 重置 clarifyTurn + lastAskedFields）
+        if (state.clarifyTurn() > 0
+                && state.lastIntent() == Intent.KNOWLEDGE_QA
+                && intentResult.intent() != Intent.KNOWLEDGE_QA) {
+            state = state.resetClarify();
+            sessionStateService.update(conversationId, state);
+        }
+
+        // ========== T1-2 4. 路由分发 ==========
+        switch (intentResult.intent()) {
+            case CHITCHAT -> {
+                handleChitchat(rewrittenQuery, session, convId, userId, traceScope, responseFuture);
+                return;
+            }
+            case AMBIGUOUS -> {
+                handleAmbiguous(session, convId, userId, userMessage, traceScope, responseFuture);
+                return;
+            }
+            case DOC_OPERATION -> {
+                // 落到下方 AgentExecutor，用 rewrittenQuery
+            }
+            case KNOWLEDGE_QA -> {
+                logger.info("[DEBUG-CLARIFY] entering KNOWLEDGE_QA case, clarify.enabled={}", aiProperties.getClarify().isEnabled());
+                // ========== T1-2 澄清流程 ==========
+                if (aiProperties.getClarify().isEnabled()) {
+                    ClarifyResult clarifyResult = runClarify(rewrittenQuery, state, conversationId, traceScope);
+                    if (clarifyResult.action() == ClarifyResult.ClarifyAction.ASK) {
+                        handleClarifyAsk(session, convId, userId, userMessage, clarifyResult,
+                                conversationId, traceScope, responseFuture);
+                        return;  // 不进 AgentExecutor
+                    }
+                    // READY → Q19 清理 SessionState
+                    state = state.onReady();
+                    sessionStateService.update(conversationId, state);
+                }
+                // 继续走 AgentExecutor
+            }
+        }
+
+        // ========== 原 AgentExecutor 路径（用改写后的 query）==========
+        List<LlmMessage> messages = buildLlmMessages(rewrittenQuery, history);
+
+        LlmProvider provider = preferenceService.getProviderForUser(userId);
+
+        AgentConfig config = AgentConfig.builder()
+                .maxIterations(5)
+                .build();
+
+        Tool.ToolContext toolContext = new Tool.ToolContext(userId, session.getId(), conversationId);
+
+        AgentContext agentContext = AgentContext.builder()
+                .toolContext(toolContext)
+                .messages(messages)
+                .build();
+        agentContext.setTraceScope(traceScope);
+
+        agentExecutor.execute(provider, config, agentContext, new AgentCallback() {
+            @Override
+            public void onThinkingChunk(String chunk) {
+                if (Boolean.TRUE.equals(stopFlags.get(session.getId()))) return;
+                StringBuilder builder = thinkingBuilders.get(session.getId());
+                if (builder != null) builder.append(chunk);
+                sendThinkingChunk(session, chunk);
+            }
+
+            @Override
+            public void onTextChunk(String chunk) {
+                if (Boolean.TRUE.equals(stopFlags.get(session.getId()))) return;
+                StringBuilder builder = responseBuilders.get(session.getId());
+                if (builder != null) builder.append(chunk);
+                sendAnswerChunk(session, chunk);
+            }
+
+            @Override
+            public void onToolCallStart(ToolCall toolCall) {
+                sendToolCallNotification(session, toolCall, "executing");
+            }
+
+            @Override
+            public void onToolCallEnd(ToolCall toolCall, Tool.ToolResult result) {
+                sendToolCallNotification(session, toolCall,
+                        result.success() ? "done" : "failed");
+            }
+
+            @Override
+            public void onComplete() {
+                TraceScope scope = traceScopeRef.get();
+                scope.recordAgentDuration(System.currentTimeMillis() - agentStartTime);
+                scope.close();
+                finishResponse(session, convId, userId, userMessage, responseFuture);
+            }
+
+            @Override
+            public void onError(Throwable error) {
+                TraceScope scope = traceScopeRef.get();
+                scope.recordError(error.getMessage());
+                scope.close();
+                handleError(session, error, convId, userId, userMessage);
+                responseFuture.completeExceptionally(error);
+                cleanupSession(session.getId());
+                responseFutures.remove(session.getId());
+            }
+        });
+    }
+
+    /**
+     * T1-2 澄清流程（§6.2）。
+     * 槽位抽取 → 超限检查 → 规则判缺失 → LLM 生成追问。
+     *
+     * @return ClarifyResult（ASK 或 READY）
+     */
+    private ClarifyResult runClarify(String query, SessionState state,
+                                     String conversationId, TraceScope traceScope) {
+        logger.info("[DEBUG-CLARIFY] runClarify called, query={}, initialState.clarifyTurn={}, initialState.slots={}", query, state.clarifyTurn(), state.slots());
+        long clarifyStart = System.currentTimeMillis();
+        ClarifyResult result = null;
+        List<String> finalMissing = List.of();
+        try {
+            // 1. 槽位抽取（用改写后的 query）
+            SlotBundle extracted = slotExtractor.extract(query);
+            logger.info("[DEBUG-CLARIFY] extracted slots: {}", extracted);
+            // 覆盖合并（Q19）：抽到即覆盖旧值，抽不到保留旧值
+            SlotBundle merged = mergeSlots(state.slots(), extracted);
+            logger.info("[DEBUG-CLARIFY] merged slots: {}", merged);
+
+            // 2. 更新 state.slots
+            state = state.withSlots(merged);
+            sessionStateService.update(conversationId, state);
+
+            // 3. Q6 超限放行
+            if (state.clarifyTurn() >= aiProperties.getClarify().getMaxClarifyTurns()) {
+                String disclaimer = aiProperties.getClarify().getExhaustedDisclaimer();
+                logger.info("[DEBUG-CLARIFY] max turns reached, READY with disclaimer");
+                result = ClarifyResult.readyWithDisclaimer(disclaimer);
+                return result;
+            }
+
+            // 4. 规则判缺失
+            List<String> missing = clarifyRuleService.missingSlots(merged, state);
+            finalMissing = missing;
+            logger.info("[DEBUG-CLARIFY] missing slots: {}", missing);
+
+            if (missing.isEmpty()) {
+                logger.info("[DEBUG-CLARIFY] no missing slots, READY");
+                result = ClarifyResult.ready();
+                return result;
+            }
+
+            // 5. LLM 生成追问
+            result = clarifyAgentService.decide(
+                    query, merged, missing, state.clarifyTurn());
+
+            // 6. ASK 时更新 state（Q18 计数 + Q13 lastAskedFields）
+            if (result.action() == ClarifyResult.ClarifyAction.ASK) {
+                state = state.onAsk(missing.get(0));
+                sessionStateService.update(conversationId, state);
+            }
+
+            return result;
+        } finally {
+            // 记录 trace
+            long latency = System.currentTimeMillis() - clarifyStart;
+            String action = result != null ? result.action().name() : "ERROR";
+            String question = result != null ? result.questionToAsk() : null;
+            try {
+                String slotsJson = String.format("{\"domain\":%s,\"entity\":%s,\"docScope\":%s,\"timeRange\":%s}",
+                        state.slots().domain() == null ? "null" : "\"" + state.slots().domain() + "\"",
+                        state.slots().entity() == null ? "null" : "\"" + state.slots().entity() + "\"",
+                        state.slots().docScope() == null ? "null" : "\"" + state.slots().docScope() + "\"",
+                        state.slots().timeRange() == null ? "null" : "\"" + state.slots().timeRange() + "\"");
+                String missingJson = finalMissing.isEmpty() ? "[]" : "[\"" + String.join("\",\"", finalMissing) + "\"]";
+                traceScope.recordClarify(query, slotsJson, missingJson, action, question, latency);
+            } catch (Exception e) {
+                logger.warn("记录 clarify trace 失败: {}", e.getMessage());
+            }
+        }
+    }
+
+    /**
+     * 覆盖合并槽位（Q19）：current 非空覆盖 history，current 为空保留 history。
+     */
+    private SlotBundle mergeSlots(SlotBundle history, SlotBundle current) {
+        if (history == null) history = SlotBundle.empty();
+        if (current == null) current = SlotBundle.empty();
+        return new SlotBundle(
+                current.domain() != null ? current.domain() : history.domain(),
+                current.docScope() != null ? current.docScope() : history.docScope(),
+                current.timeRange() != null ? current.timeRange() : history.timeRange(),
+                current.entity() != null ? current.entity() : history.entity());
+    }
+
+    /**
+     * 澄清追问处理：同步返回追问文案（Q7），不进 AgentExecutor。
+     */
+    private void handleClarifyAsk(WebSocketSession session, String convId, String userId,
+                                    String userMessage, ClarifyResult clarifyResult,
+                                    String conversationId, TraceScope traceScope,
+                                    CompletableFuture<String> responseFuture) {
+        long startTime = System.currentTimeMillis();
+        try {
+            String reply = clarifyResult.questionToAsk();
+            if (reply == null || reply.isBlank()) {
+                reply = clarifyRuleService.fallbackQuestion(clarifyResult.missingSlots(), false);
+            }
+
+            StringBuilder builder = responseBuilders.get(session.getId());
+            if (builder != null) builder.append(reply);
+            sendAnswerChunk(session, reply);  // 同步返回（Q7）
+
+            traceScope.recordAgentDuration(System.currentTimeMillis() - startTime);
+            traceScope.close();
+            finishResponse(session, convId, userId, userMessage, responseFuture);
+        } catch (Exception e) {
+            logger.error("澄清追问处理失败: {}", e.getMessage(), e);
+            traceScope.recordError(e.getMessage());
+            traceScope.close();
+            handleError(session, e, convId, userId, userMessage);
+            cleanupSession(session.getId());
+            responseFutures.remove(session.getId());
         }
     }
 

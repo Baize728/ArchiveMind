@@ -36,7 +36,10 @@ class IntentRouterTest {
         aiProperties.getIntent().setAmbiguousThreshold(0.4);
 
         IntentAgentService agentService = new IntentAgentService(intentLlmClient, aiProperties);
-        IntentReviseService reviseService = new IntentReviseService(aiProperties);
+        com.zyh.archivemind.common.DomainAliasMatcher domainAliasMatcher =
+                new com.zyh.archivemind.common.DomainAliasMatcher();
+        domainAliasMatcher.init();
+        IntentReviseService reviseService = new IntentReviseService(aiProperties, domainAliasMatcher);
         router = new IntentRouter(agentService, reviseService);
     }
 

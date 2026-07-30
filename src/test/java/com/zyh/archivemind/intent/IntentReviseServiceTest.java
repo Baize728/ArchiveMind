@@ -25,7 +25,10 @@ class IntentReviseServiceTest {
                 "knowledge_qa", List.of("查询", "什么是", "怎么")
         ));
         aiProperties.getIntent().setAmbiguousThreshold(0.4);
-        service = new IntentReviseService(aiProperties);
+        com.zyh.archivemind.common.DomainAliasMatcher domainAliasMatcher =
+                new com.zyh.archivemind.common.DomainAliasMatcher();
+        domainAliasMatcher.init();
+        service = new IntentReviseService(aiProperties, domainAliasMatcher);
     }
 
     @Test
@@ -387,5 +390,75 @@ class IntentReviseServiceTest {
         IntentResult result = service.revise(llmResult, "不匹配的输入");
 
         assertEquals(Intent.AMBIGUOUS, result.intent());
+    }
+
+    // ========== T1-2 Q11 升格判定 ==========
+
+    @Test
+    @DisplayName("Q11 升格：上一轮 AMBIGUOUS + 本轮 LLM 仍判 AMBIGUOUS + 命中 finance 别名 → 升格 KNOWLEDGE_QA")
+    void shouldUpgradeAmbiguousToKnowledgeQaWhenDomainAliasMatched() {
+        // 上一轮是 AMBIGUOUS
+        com.zyh.archivemind.model.SessionState prevState =
+                com.zyh.archivemind.model.SessionState.fresh()
+                        .withLastIntent(Intent.AMBIGUOUS);
+
+        // 本轮 LLM 仍判为 AMBIGUOUS（不是 KNOWLEDGE_QA！）
+        IntentResult llmResult = new IntentResult(Intent.AMBIGUOUS, 0.5, "LLM", "raw");
+
+        // 输入含 "报销" → 命中 finance 别名
+        IntentResult result = service.revise(llmResult, "报销的相关问题", prevState);
+
+        // 期望升格为 KNOWLEDGE_QA
+        assertEquals(Intent.KNOWLEDGE_QA, result.intent());
+        assertEquals(0.6, result.confidence());
+        assertEquals("RULE", result.source());
+    }
+
+    @Test
+    @DisplayName("Q11 不升格：本轮 LLM 判为 KNOWLEDGE_QA（不依赖 lastIntent 升格）")
+    void shouldNotUpgradeWhenLlmAlreadyKnowledgeQa() {
+        com.zyh.archivemind.model.SessionState prevState =
+                com.zyh.archivemind.model.SessionState.fresh()
+                        .withLastIntent(Intent.AMBIGUOUS);
+
+        IntentResult llmResult = new IntentResult(Intent.KNOWLEDGE_QA, 0.85, "LLM", "raw");
+
+        // LLM 已判为 KNOWLEDGE_QA，保留 LLM 结果（不升格，Q11 只处理 AMBIGUOUS+AMBIGUOUS）
+        IntentResult result = service.revise(llmResult, "报销流程是什么", prevState);
+
+        assertEquals(Intent.KNOWLEDGE_QA, result.intent());
+        assertEquals("LLM", result.source());
+    }
+
+    @Test
+    @DisplayName("Q11 不升格：上一轮不是 AMBIGUOUS")
+    void shouldNotUpgradeWhenLastIntentNotAmbiguous() {
+        com.zyh.archivemind.model.SessionState prevState =
+                com.zyh.archivemind.model.SessionState.fresh()
+                        .withLastIntent(Intent.CHITCHAT);
+
+        IntentResult llmResult = new IntentResult(Intent.AMBIGUOUS, 0.5, "LLM", "raw");
+
+        IntentResult result = service.revise(llmResult, "报销的相关问题", prevState);
+
+        // 上一轮不是 AMBIGUOUS，不升格；又因 confidence=0.5>=0.4，保留 LLM AMBIGUOUS
+        assertEquals(Intent.AMBIGUOUS, result.intent());
+        assertEquals("LLM", result.source());
+    }
+
+    @Test
+    @DisplayName("Q11 不升格：本轮 LLM 判 AMBIGUOUS 但未命中 domain 别名")
+    void shouldNotUpgradeWhenNoDomainAliasMatched() {
+        com.zyh.archivemind.model.SessionState prevState =
+                com.zyh.archivemind.model.SessionState.fresh()
+                        .withLastIntent(Intent.AMBIGUOUS);
+
+        IntentResult llmResult = new IntentResult(Intent.AMBIGUOUS, 0.5, "LLM", "raw");
+
+        // "完全不相关" → 不含任何 domain 别名
+        IntentResult result = service.revise(llmResult, "完全不相关的输入", prevState);
+
+        assertEquals(Intent.AMBIGUOUS, result.intent());
+        assertEquals("LLM", result.source());
     }
 }
