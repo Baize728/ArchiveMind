@@ -126,6 +126,7 @@ public class ParseService {
         private final String orgTag;
         private final boolean isPublic;
         private int savedChunkCount = 0;
+        private int parentChunkSeq = 0;  // 父块序号，用于 Small-to-Big 回溯
 
         public StreamingContentHandler(String fileMd5, String userId, String orgTag, boolean isPublic) {
             super(-1); // 禁用Tika的内部写入限制，我们自己管理缓冲区
@@ -153,13 +154,16 @@ public class ParseService {
 
         private void processParentChunk() {
             String parentChunkText = buffer.toString();
-            logger.debug("处理父文本块，大小: {} bytes", parentChunkText.length());
+            int currentParentSeq = ++parentChunkSeq;
+            logger.debug("处理父块 #{}, 大小: {} bytes", currentParentSeq, parentChunkText.length());
 
             // 1. 将父块分割成更小的、有语义的子切片
             List<String> childChunks = ParseService.this.splitTextIntoChunksWithSemantics(parentChunkText, chunkSize);
 
-            // 2. 将子切片批量保存到数据库
-            this.savedChunkCount = ParseService.this.saveChildChunks(fileMd5, childChunks, userId, orgTag, isPublic, this.savedChunkCount);
+            // 2. 子块批量保存到数据库，同时关联父块 ID 和父块完整文本
+            this.savedChunkCount = ParseService.this.saveChildChunks(
+                    fileMd5, childChunks, userId, orgTag, isPublic,
+                    this.savedChunkCount, currentParentSeq, parentChunkText);
 
             // 3. 清空缓冲区，为下一个父块做准备
             buffer.setLength(0);
@@ -167,7 +171,8 @@ public class ParseService {
     }
 
     /**
-     * 将子切片列表保存到数据库。
+     * 将子切片列表批量保存到数据库（含 Parent-Child 关联）。
+     * 采用 Small-to-Big 策略：子块用于检索，父块完整文本作为 LLM 上下文。
      *
      * @param fileMd5         文件的 MD5 哈希值
      * @param chunks          子切片文本列表
@@ -175,11 +180,15 @@ public class ParseService {
      * @param orgTag          组织标签
      * @param isPublic        是否公开
      * @param startingChunkId 当前批次的起始分片ID
+     * @param parentChunkId   父块 ID（同一父块下的子块共享此 ID）
+     * @param parentText      父块完整文本（检索时回溯用）
      * @return 保存后总的分片数量
      */
     private int saveChildChunks(String fileMd5, List<String> chunks,
-            String userId, String orgTag, boolean isPublic, int startingChunkId) {
+            String userId, String orgTag, boolean isPublic, int startingChunkId,
+            int parentChunkId, String parentText) {
         int currentChunkId = startingChunkId;
+        List<DocumentVector> batch = new ArrayList<>(chunks.size());
         for (String chunk : chunks) {
             currentChunkId++;
             var vector = new DocumentVector();
@@ -189,10 +198,27 @@ public class ParseService {
             vector.setUserId(userId);
             vector.setOrgTag(orgTag);
             vector.setPublic(isPublic);
-            documentVectorRepository.save(vector);
+            vector.setParentChunkId(parentChunkId);
+            vector.setParentText(parentText);
+            batch.add(vector);
         }
-        logger.info("成功保存 {} 个子切片到数据库", chunks.size());
+        // 分批 saveAll：每 200 条一次 flush，避免单次事务过大
+        for (int i = 0; i < batch.size(); i += 200) {
+            int end = Math.min(i + 200, batch.size());
+            documentVectorRepository.saveAll(batch.subList(i, end));
+        }
+        logger.info("父块#{}: 成功批量保存 {} 个子切片到数据库", parentChunkId, chunks.size());
         return currentChunkId;
+    }
+
+    /**
+     * 兼容旧版本的单插入方法（不再推荐使用）。
+     * @deprecated 使用带 parentChunkId/parentText 的批量保存方法替代
+     */
+    @Deprecated
+    private int saveChildChunks(String fileMd5, List<String> chunks,
+            String userId, String orgTag, boolean isPublic, int startingChunkId) {
+        return saveChildChunks(fileMd5, chunks, userId, orgTag, isPublic, startingChunkId, 0, null);
     }
 
     /**

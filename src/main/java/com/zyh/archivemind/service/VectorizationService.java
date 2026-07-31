@@ -8,6 +8,7 @@ import com.zyh.archivemind.repository.DocumentVectorRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -28,6 +29,9 @@ public class VectorizationService {
 
     @Autowired
     private DocumentVectorRepository documentVectorRepository;
+
+    @Value("${embedding.api.model}")
+    private String modelVersion;
 
     /**
      * 执行向量化操作
@@ -64,7 +68,7 @@ public class VectorizationService {
                             chunks.get(i).getChunkId(),
                             chunks.get(i).getContent(),
                             vectors.get(i),
-                            "deepseek-embed", // 更新为 DeepSeek 的模型版本
+                            modelVersion,        // 从配置读取，如 text-embedding-v4
                             userId,
                             orgTag,
                             isPublic

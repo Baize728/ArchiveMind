@@ -44,4 +44,19 @@ public class DocumentVector {
      */
     @Column(name = "is_public", nullable = false)
     private boolean isPublic = false;
+
+    /**
+     * 父块 ID，用于 Small-to-Big 检索时回溯父块上下文。
+     * 同一父块下的子块共享相同的 parentChunkId。
+     */
+    @Column(name = "parent_chunk_id")
+    private Integer parentChunkId;
+
+    /**
+     * 父块完整文本内容（建议 2048-4096 字符）。
+     * 检索时子块命中后，通过此字段回取父块完整上下文给 LLM。
+     */
+    @Lob
+    @Column(name = "parent_text")
+    private String parentText;
 }
