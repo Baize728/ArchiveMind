@@ -66,18 +66,14 @@ public class KnowledgeSearchTool implements Tool {
                 return Tool.ToolResult.success("未找到与 \"" + query + "\" 相关的文档");
             }
 
-            // 格式化搜索结果（使用 ObjectMapper 安全序列化，与原 ChatHandler 逻辑一致）
+            // 格式化搜索结果：返回完整内容，不再截断（让 LLM 获取完整上下文）
             List<Map<String, String>> formatted = new ArrayList<>();
             for (int i = 0; i < results.size(); i++) {
                 SearchResult r = results.get(i);
-                String snippet = r.getTextContent();
-                if (snippet.length() > 800) {
-                    snippet = snippet.substring(0, 800) + "…";
-                }
                 Map<String, String> item = new LinkedHashMap<>();
                 item.put("index", String.valueOf(i + 1));
                 item.put("file", r.getFileName() != null ? r.getFileName() : "unknown");
-                item.put("content", snippet);
+                item.put("content", r.getTextContent());
                 formatted.add(item);
             }
 

@@ -11,6 +11,8 @@ import org.apache.http.ssl.SSLContexts;
 import javax.net.ssl.SSLContext;
 import java.security.cert.X509Certificate;
 import org.apache.http.conn.ssl.NoopHostnameVerifier;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -38,6 +40,11 @@ public class EsConfig {
     @Value("${elasticsearch.password:changeme}")
     private String password;
 
+    @Value("${elasticsearch.insecure-skip-tls:false}")
+    private boolean skipTls;
+
+    private static final Logger logger = LoggerFactory.getLogger(EsConfig.class);
+
     @Bean
     public ElasticsearchClient elasticsearchClient() {
         // 创建低级客户端
@@ -48,15 +55,18 @@ public class EsConfig {
             BasicCredentialsProvider credsProvider = new BasicCredentialsProvider();
             credsProvider.setCredentials(AuthScope.ANY, new UsernamePasswordCredentials(username, password));
             builder.setHttpClientConfigCallback(httpClientBuilder -> {
-                // 忽略 TLS 证书（仅限开发环境）
-                try {
-                    SSLContext sslContext = SSLContexts.custom()
-                            .loadTrustMaterial(null, (X509Certificate[] chain, String authType) -> true)
-                            .build();
-                    httpClientBuilder.setSSLContext(sslContext);
-                    httpClientBuilder.setSSLHostnameVerifier(NoopHostnameVerifier.INSTANCE);
-                } catch (Exception e) {
-                    // ignore
+                // TLS 证书跳过仅限开发/测试环境
+                if (skipTls) {
+                    logger.warn("!!! ES TLS 证书校验已禁用，仅限开发/测试环境 !!!");
+                    try {
+                        SSLContext sslContext = SSLContexts.custom()
+                                .loadTrustMaterial(null, (X509Certificate[] chain, String authType) -> true)
+                                .build();
+                        httpClientBuilder.setSSLContext(sslContext);
+                        httpClientBuilder.setSSLHostnameVerifier(NoopHostnameVerifier.INSTANCE);
+                    } catch (Exception e) {
+                        throw new RuntimeException("TLS 配置失败", e);
+                    }
                 }
                 return httpClientBuilder.setDefaultCredentialsProvider(credsProvider);
             });
