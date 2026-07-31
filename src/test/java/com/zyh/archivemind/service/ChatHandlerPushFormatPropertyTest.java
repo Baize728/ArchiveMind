@@ -74,7 +74,7 @@ class ChatHandlerPushFormatPropertyTest {
                 mockSessionStateService(),
                 mock(com.zyh.archivemind.clarify.SlotExtractor.class),
                 mock(com.zyh.archivemind.clarify.ClarifyRuleService.class),
-                mock(com.zyh.archivemind.clarify.ClarifyAgentService.class));
+                mock(com.zyh.archivemind.clarify.ClarifyAgentService.class), mock(com.zyh.archivemind.fallback.FallbackPolicyService.class));
 
         // Act
         chatHandler.processMessage("user1", "hello", wsSession);
@@ -136,7 +136,7 @@ class ChatHandlerPushFormatPropertyTest {
                 mockSessionStateService(),
                 mock(com.zyh.archivemind.clarify.SlotExtractor.class),
                 mock(com.zyh.archivemind.clarify.ClarifyRuleService.class),
-                mock(com.zyh.archivemind.clarify.ClarifyAgentService.class));
+                mock(com.zyh.archivemind.clarify.ClarifyAgentService.class), mock(com.zyh.archivemind.fallback.FallbackPolicyService.class));
 
         // Act
         chatHandler.processMessage("user2", "hello", wsSession);
@@ -160,7 +160,7 @@ class ChatHandlerPushFormatPropertyTest {
     /** 创建一个 mock IntentRouter，默认返回 KNOWLEDGE_QA 走 AgentExecutor 路径 */
     private static com.zyh.archivemind.intent.IntentRouter mockIntentRouter() {
         com.zyh.archivemind.intent.IntentRouter router = mock(com.zyh.archivemind.intent.IntentRouter.class);
-        when(router.route(any(), any(), any())).thenReturn(
+        when(router.route(any(), any(), any(), any())).thenReturn(
                 new com.zyh.archivemind.intent.IntentResult(
                         com.zyh.archivemind.intent.Intent.KNOWLEDGE_QA, 0.9, "LLM", ""));
         return router;

@@ -23,6 +23,7 @@ public class AiProperties {
     private Intent intent = new Intent();
     private Clarify clarify = new Clarify();
     private Judge judge = new Judge();
+    private Fallback fallback = new Fallback();
 
     @Data
     public static class Judge {
@@ -128,5 +129,21 @@ public class AiProperties {
         private int domainRequiredOtherScoreThreshold = 3;
         /** 超限放行免责声明（Q6） */
         private String exhaustedDisclaimer = "基于您当前的描述，我检索到以下内容，如不准确请补充更多信息。";
+    }
+
+    @Data
+    public static class Fallback {
+        /** 答案生成全空场景模板（LLM 无任何输出） */
+        private String answerTemplate = "抱歉，回复生成遇到问题，请稍后重试或换个问法。";
+
+        /** 答案生成部分断流场景模板（已有半截输出，追加此模板） */
+        private String answerPartialTemplate =
+                "\n\n---\n\n> ⚠️ 回复生成中断，以上为部分内容。请稍后重试或换个问法。";
+
+        /** 闲聊 LLM 返回空时的固定文案（从 ChatHandler 硬编码迁入） */
+        private String chitchatTemplate = "你好！我是ArchiveMind知识助手，有什么可以帮您查询的吗？";
+
+        /** 进程级异常兜底文案（handleError 推给前端的 error 帧，从 ChatHandler 硬编码迁入） */
+        private String errorTemplate = "AI服务暂时不可用，请稍后重试";
     }
 }

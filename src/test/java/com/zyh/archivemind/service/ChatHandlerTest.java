@@ -49,6 +49,7 @@ class ChatHandlerTest {
     @Mock private com.zyh.archivemind.clarify.SlotExtractor slotExtractor;
     @Mock private com.zyh.archivemind.clarify.ClarifyRuleService clarifyRuleService;
     @Mock private com.zyh.archivemind.clarify.ClarifyAgentService clarifyAgentService;
+    @Mock private com.zyh.archivemind.fallback.FallbackPolicyService fallbackPolicyService;
 
     private ChatHandler chatHandler;
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -60,7 +61,7 @@ class ChatHandlerTest {
                 preferenceService, agentExecutor, new AiProperties(), traceCollector,
                 intentRouter, intentLlmClient,
                 queryRewriteService, sessionStateService, slotExtractor,
-                clarifyRuleService, clarifyAgentService);
+                clarifyRuleService, clarifyAgentService, fallbackPolicyService);
         // 默认 mock：QueryRewrite 原样返回、SessionState 返回 fresh
         lenient().when(queryRewriteService.rewrite(anyString(), any())).thenAnswer(inv -> inv.getArgument(0));
         lenient().when(sessionStateService.get(any())).thenReturn(com.zyh.archivemind.model.SessionState.fresh());
@@ -69,7 +70,7 @@ class ChatHandlerTest {
         lenient().when(session.getId()).thenReturn("test-session-id");
         lenient().when(preferenceService.getProviderForUser(anyString())).thenReturn(llmProvider);
         // 默认意图为 KNOWLEDGE_QA，走 AgentExecutor 路径
-        lenient().when(intentRouter.route(anyString(), any(), any()))
+        lenient().when(intentRouter.route(anyString(), any(), any(), any()))
                 .thenReturn(new IntentResult(Intent.KNOWLEDGE_QA, 0.9, "LLM", ""));
     }
 
@@ -154,7 +155,7 @@ class ChatHandlerTest {
     @Test
     @DisplayName("CHITCHAT 意图应走 handleChitchat 不进 AgentExecutor")
     void shouldHandleChitchatWithoutAgentExecutor() {
-        when(intentRouter.route(anyString(), any(), any()))
+        when(intentRouter.route(anyString(), any(), any(), any()))
                 .thenReturn(new IntentResult(Intent.CHITCHAT, 0.8, "RULE", ""));
         when(intentLlmClient.chatSync(anyList())).thenReturn("你好！有什么可以帮您？");
         when(conversationSessionService.getActiveSessionId(anyString())).thenReturn("conv-chitchat");
@@ -169,7 +170,7 @@ class ChatHandlerTest {
     @Test
     @DisplayName("AMBIGUOUS 意图应走 handleAmbiguous 不进 AgentExecutor")
     void shouldHandleAmbiguousWithoutAgentExecutor() {
-        when(intentRouter.route(anyString(), any(), any()))
+        when(intentRouter.route(anyString(), any(), any(), any()))
                 .thenReturn(new IntentResult(Intent.AMBIGUOUS, 0.2, "KEYWORD", ""));
         when(conversationSessionService.getActiveSessionId(anyString())).thenReturn("conv-amb");
         when(valueOperations.get(anyString())).thenReturn(null);
@@ -183,7 +184,7 @@ class ChatHandlerTest {
     @Test
     @DisplayName("CHITCHAT 时 IntentLlmClient 返回 null 应走兜底文案")
     void shouldUseFallbackWhenChitchatLlmReturnsNull() throws Exception {
-        when(intentRouter.route(anyString(), any(), any()))
+        when(intentRouter.route(anyString(), any(), any(), any()))
                 .thenReturn(new IntentResult(Intent.CHITCHAT, 0.8, "RULE", ""));
         when(intentLlmClient.chatSync(anyList())).thenReturn(null);
         when(conversationSessionService.getActiveSessionId(anyString())).thenReturn("conv-chitchat");
@@ -198,7 +199,7 @@ class ChatHandlerTest {
     @Test
     @DisplayName("CHITCHAT 时 IntentLlmClient 返回空字符串应走兜底文案")
     void shouldUseFallbackWhenChitchatLlmReturnsEmpty() {
-        when(intentRouter.route(anyString(), any(), any()))
+        when(intentRouter.route(anyString(), any(), any(), any()))
                 .thenReturn(new IntentResult(Intent.CHITCHAT, 0.8, "RULE", ""));
         when(intentLlmClient.chatSync(anyList())).thenReturn("");
         when(conversationSessionService.getActiveSessionId(anyString())).thenReturn("conv-chitchat");
@@ -212,7 +213,7 @@ class ChatHandlerTest {
     @Test
     @DisplayName("CHITCHAT 时应保存对话历史到 Redis")
     void shouldSaveHistoryForChitchat() {
-        when(intentRouter.route(anyString(), any(), any()))
+        when(intentRouter.route(anyString(), any(), any(), any()))
                 .thenReturn(new IntentResult(Intent.CHITCHAT, 0.8, "RULE", ""));
         when(intentLlmClient.chatSync(anyList())).thenReturn("你好！有什么可以帮您？");
         when(conversationSessionService.getActiveSessionId(anyString())).thenReturn("conv-chitchat");
@@ -234,9 +235,9 @@ class ChatHandlerTest {
                 preferenceService, agentExecutor, customProps, traceCollector,
                 intentRouter, intentLlmClient,
                 queryRewriteService, sessionStateService, slotExtractor,
-                clarifyRuleService, clarifyAgentService);
+                clarifyRuleService, clarifyAgentService, fallbackPolicyService);
 
-        when(intentRouter.route(anyString(), any(), any()))
+        when(intentRouter.route(anyString(), any(), any(), any()))
                 .thenReturn(new IntentResult(Intent.AMBIGUOUS, 0.2, "KEYWORD", ""));
         when(conversationSessionService.getActiveSessionId(anyString())).thenReturn("conv-amb");
         when(valueOperations.get(anyString())).thenReturn(null);
@@ -250,7 +251,7 @@ class ChatHandlerTest {
     @Test
     @DisplayName("DOC_OPERATION 意图应走 AgentExecutor（一期不另建链路）")
     void docOperationShouldGoThroughAgentExecutor() {
-        when(intentRouter.route(anyString(), any(), any()))
+        when(intentRouter.route(anyString(), any(), any(), any()))
                 .thenReturn(new IntentResult(Intent.DOC_OPERATION, 0.9, "LLM", ""));
         when(conversationSessionService.getActiveSessionId(anyString())).thenReturn("conv-doc");
         when(valueOperations.get(anyString())).thenReturn(null);
@@ -270,7 +271,7 @@ class ChatHandlerTest {
     @Test
     @DisplayName("CHITCHAT 时 IntentLlmClient 抛异常应走 handleError 不崩")
     void shouldHandleChitchatLlmException() throws Exception {
-        when(intentRouter.route(anyString(), any(), any()))
+        when(intentRouter.route(anyString(), any(), any(), any()))
                 .thenReturn(new IntentResult(Intent.CHITCHAT, 0.8, "RULE", ""));
         when(intentLlmClient.chatSync(anyList())).thenThrow(new RuntimeException("LLM 宕机"));
         when(conversationSessionService.getActiveSessionId(anyString())).thenReturn("conv-chitchat");
@@ -297,6 +298,6 @@ class ChatHandlerTest {
         chatHandler.processMessage("user13", "测试", session);
 
         // TraceScope 是 noop，但 recordIntent 应被调用不报错
-        verify(intentRouter).route(anyString(), any(), any());
+        verify(intentRouter).route(anyString(), any(), any(), any());
     }
 }

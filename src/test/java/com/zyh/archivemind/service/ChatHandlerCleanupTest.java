@@ -59,10 +59,11 @@ class ChatHandlerCleanupTest {
                 sessionStateService,
                 mock(com.zyh.archivemind.clarify.SlotExtractor.class),
                 mock(com.zyh.archivemind.clarify.ClarifyRuleService.class),
-                mock(com.zyh.archivemind.clarify.ClarifyAgentService.class));
+                mock(com.zyh.archivemind.clarify.ClarifyAgentService.class),
+                mock(com.zyh.archivemind.fallback.FallbackPolicyService.class));
 
-        // 默认意图为 KNOWLEDGE_QA，走 AgentExecutor 路径（三参数版本）
-        lenient().when(intentRouter.route(any(), any(), any()))
+        // 默认意图为 KNOWLEDGE_QA，走 AgentExecutor 路径
+        lenient().when(intentRouter.route(any(), any(), any(), any()))
                 .thenReturn(new com.zyh.archivemind.intent.IntentResult(
                         com.zyh.archivemind.intent.Intent.KNOWLEDGE_QA, 0.9, "LLM", ""));
 

@@ -26,6 +26,7 @@ public class TraceEvent {
         INTENT_RECOGNIZED,  // 意图识别（T1-1）
         QUERY_REWRITE,      // Query 改写（T1-2）
         CLARIFY,            // 澄清追问（T1-2）
+        FALLBACK,           // 降级兜底（T1-5）
         LEGACY,             // 历史废弃事件类型（AGENT_START/AGENT_COMPLETE 等）的兼容降级
         ERROR               // 出错
     }

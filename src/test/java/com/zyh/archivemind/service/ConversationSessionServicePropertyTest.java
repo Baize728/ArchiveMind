@@ -316,7 +316,7 @@ class ConversationSessionServicePropertyTest {
     }
 
     /**
-     * Feature: new-conversation, Property 3: 会话列表按时间降序排�?
+     * Feature: new-conversation, Property 3: 会话列表按时间降序排列
      * For any user with a set of sessions (each with distinct creation times),
      * listSessions should return sessions in each group ordered by createdAt descending.
      * Validates: Requirements 2.1
@@ -389,7 +389,7 @@ class ConversationSessionServicePropertyTest {
     }
 
     /**
-     * Feature: new-conversation, Property 4: 会话时间分组正确�?
+     * Feature: new-conversation, Property 4: 会话时间分组正确性
      * For any session and its createdAt timestamp, the session should be assigned to the correct
      * time group: "today" if created today, "week" if 1-7 days ago, "month" if 7-30 days ago,
      * "earlier" (keyed by year-month) if more than 30 days ago. Each returned session object
@@ -544,7 +544,7 @@ class ConversationSessionServicePropertyTest {
     }
 
     /**
-     * Feature: new-conversation, Property 6: 切换会话返回消息历史往�?
+     * Feature: new-conversation, Property 6: 切换会话返回消息历史往返
      * For any session, store a set of messages, then switch to that session via switchSession.
      * The returned message list should match the stored messages in role and content, in order.
      * Validates: Requirements 3.2

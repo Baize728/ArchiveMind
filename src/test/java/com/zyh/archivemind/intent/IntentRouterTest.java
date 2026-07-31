@@ -39,8 +39,13 @@ class IntentRouterTest {
         com.zyh.archivemind.common.DomainAliasMatcher domainAliasMatcher =
                 new com.zyh.archivemind.common.DomainAliasMatcher();
         domainAliasMatcher.init();
-        IntentReviseService reviseService = new IntentReviseService(aiProperties, domainAliasMatcher);
-        router = new IntentRouter(agentService, reviseService);
+        // T1-5 Q12：IntentReviseService 删除，降级逻辑迁入 FallbackPolicyService
+        com.zyh.archivemind.fallback.FallbackPolicyService fallbackPolicyService =
+                new com.zyh.archivemind.fallback.FallbackPolicyService(
+                        aiProperties, domainAliasMatcher,
+                        org.mockito.Mockito.mock(com.zyh.archivemind.clarify.ClarifyRuleService.class),
+                        org.mockito.Mockito.mock(com.zyh.archivemind.client.ClarifyLlmClient.class));
+        router = new IntentRouter(agentService, fallbackPolicyService);
     }
 
     @Test
@@ -50,7 +55,7 @@ class IntentRouterTest {
                 .thenReturn("{\"intent\":\"KNOWLEDGE_QA\",\"confidence\":0.9}");
 
         // 输入不含关键词，LLM 结果应保留
-        IntentResult result = router.route("差旅费报销的审批节点有哪些", List.of());
+        IntentResult result = router.route("差旅费报销的审批节点有哪些", List.of(), null, null);
 
         assertEquals(Intent.KNOWLEDGE_QA, result.intent());
         // 输入不含任何关键词，LLM 结果保留
@@ -65,7 +70,7 @@ class IntentRouterTest {
         when(intentLlmClient.chatSync(anyList()))
                 .thenReturn("{\"intent\":\"KNOWLEDGE_QA\",\"confidence\":0.8}");
 
-        IntentResult result = router.route("你好", List.of());
+        IntentResult result = router.route("你好", List.of(), null, null);
 
         assertEquals(Intent.CHITCHAT, result.intent());
         assertEquals("RULE", result.source());
@@ -76,7 +81,7 @@ class IntentRouterTest {
     void scenario3_LlmTimeoutKeywordFallback() {
         when(intentLlmClient.chatSync(anyList())).thenReturn(null);
 
-        IntentResult result = router.route("把这份合同归档", List.of());
+        IntentResult result = router.route("把这份合同归档", List.of(), null, null);
 
         assertEquals(Intent.DOC_OPERATION, result.intent());
         assertEquals("KEYWORD", result.source());
@@ -88,7 +93,7 @@ class IntentRouterTest {
     void scenario4_LlmTimeoutNoKeywordFallback() {
         when(intentLlmClient.chatSync(anyList())).thenReturn(null);
 
-        IntentResult result = router.route("那个东西", List.of());
+        IntentResult result = router.route("那个东西", List.of(), null, null);
 
         assertEquals(Intent.AMBIGUOUS, result.intent());
         assertEquals("KEYWORD", result.source());
@@ -101,7 +106,7 @@ class IntentRouterTest {
         when(intentLlmClient.chatSync(anyList()))
                 .thenReturn("{\"intent\":\"KNOWLEDGE_QA\",\"confidence\":0.3}");
 
-        IntentResult result = router.route("那个东西", List.of());
+        IntentResult result = router.route("那个东西", List.of(), null, null);
 
         assertEquals(Intent.AMBIGUOUS, result.intent());
         assertEquals("RULE", result.source());
@@ -112,7 +117,7 @@ class IntentRouterTest {
     void scenario6_InvalidJsonFallback() {
         when(intentLlmClient.chatSync(anyList())).thenReturn("这不是JSON");
 
-        IntentResult result = router.route("随便输入", List.of());
+        IntentResult result = router.route("随便输入", List.of(), null, null);
 
         assertEquals(Intent.AMBIGUOUS, result.intent());
         assertEquals("KEYWORD", result.source());
@@ -123,7 +128,7 @@ class IntentRouterTest {
     void scenario7_DisabledIntentRecognition() {
         aiProperties.getIntent().setEnabled(false);
 
-        IntentResult result = router.route("你好", List.of());
+        IntentResult result = router.route("你好", List.of(), null, null);
 
         // 未启用 LLM，但关键词仍然生效（IntentReviseService 不依赖 enabled 开关）
         assertEquals(Intent.CHITCHAT, result.intent());
@@ -137,7 +142,7 @@ class IntentRouterTest {
         when(intentLlmClient.chatSync(anyList()))
                 .thenReturn("{\"intent\":\"DOC_OPERATION\",\"confidence\":0.9}");
 
-        IntentResult result = router.route("请帮我把这份文件上传到系统", List.of());
+        IntentResult result = router.route("请帮我把这份文件上传到系统", List.of(), null, null);
 
         assertEquals(Intent.DOC_OPERATION, result.intent());
         assertEquals("LLM", result.source());
@@ -149,7 +154,7 @@ class IntentRouterTest {
         when(intentLlmClient.chatSync(anyList()))
                 .thenReturn("{\"intent\":\"AMBIGUOUS\",\"confidence\":0.6}");
 
-        IntentResult result = router.route("那个东西", List.of());
+        IntentResult result = router.route("那个东西", List.of(), null, null);
 
         assertEquals(Intent.AMBIGUOUS, result.intent());
         assertEquals("LLM", result.source());
@@ -161,7 +166,7 @@ class IntentRouterTest {
         when(intentLlmClient.chatSync(anyList()))
                 .thenReturn("{\"intent\":\"KNOWLEDGE_QA\",\"confidence\":0.4}");
 
-        IntentResult result = router.route("不匹配任何关键词的输入", List.of());
+        IntentResult result = router.route("不匹配任何关键词的输入", List.of(), null, null);
 
         assertEquals(Intent.KNOWLEDGE_QA, result.intent());
         assertEquals("LLM", result.source());
@@ -173,7 +178,7 @@ class IntentRouterTest {
         when(intentLlmClient.chatSync(anyList()))
                 .thenReturn("{\"intent\":\"CHITCHAT\",\"confidence\":0.8}");
 
-        IntentResult result = router.route("你好", List.of());
+        IntentResult result = router.route("你好", List.of(), null, null);
 
         assertEquals(Intent.CHITCHAT, result.intent());
         assertEquals("RULE", result.source()); // 关键词覆盖，source 变为 RULE
@@ -185,7 +190,7 @@ class IntentRouterTest {
         when(intentLlmClient.chatSync(anyList()))
                 .thenReturn("{\"intent\":\"KNOWLEDGE_QA\",\"confidence\":0.9}");
 
-        IntentResult result = router.route("谢谢你", List.of());
+        IntentResult result = router.route("谢谢你", List.of(), null, null);
 
         assertEquals(Intent.CHITCHAT, result.intent());
         assertEquals("RULE", result.source());
@@ -197,7 +202,7 @@ class IntentRouterTest {
         when(intentLlmClient.chatSync(anyList()))
                 .thenReturn("{\"intent\":\"CHITCHAT\",\"confidence\":0.8}");
 
-        IntentResult result = router.route("删除文档", List.of());
+        IntentResult result = router.route("删除文档", List.of(), null, null);
 
         assertEquals(Intent.DOC_OPERATION, result.intent());
         assertEquals("RULE", result.source());
@@ -209,7 +214,7 @@ class IntentRouterTest {
         when(intentLlmClient.chatSync(anyList()))
                 .thenReturn("```json\n{\"intent\":\"KNOWLEDGE_QA\",\"confidence\":0.9}\n```");
 
-        IntentResult result = router.route("不匹配关键词的输入", List.of());
+        IntentResult result = router.route("不匹配关键词的输入", List.of(), null, null);
 
         assertEquals(Intent.KNOWLEDGE_QA, result.intent());
         assertEquals("LLM", result.source());
@@ -221,7 +226,7 @@ class IntentRouterTest {
         when(intentLlmClient.chatSync(anyList()))
                 .thenReturn("好的，分析结果：{\"intent\":\"KNOWLEDGE_QA\",\"confidence\":0.9} 完成。");
 
-        IntentResult result = router.route("不匹配关键词的输入", List.of());
+        IntentResult result = router.route("不匹配关键词的输入", List.of(), null, null);
 
         assertEquals(Intent.KNOWLEDGE_QA, result.intent());
     }
@@ -231,7 +236,7 @@ class IntentRouterTest {
     void nullInputFullFallback() {
         when(intentLlmClient.chatSync(anyList())).thenReturn(null);
 
-        IntentResult result = router.route(null, List.of());
+        IntentResult result = router.route(null, List.of(), null, null);
 
         assertEquals(Intent.AMBIGUOUS, result.intent());
         assertEquals("KEYWORD", result.source());
@@ -242,7 +247,7 @@ class IntentRouterTest {
     void emptyInputFullFallback() {
         when(intentLlmClient.chatSync(anyList())).thenReturn(null);
 
-        IntentResult result = router.route("", List.of());
+        IntentResult result = router.route("", List.of(), null, null);
 
         assertEquals(Intent.AMBIGUOUS, result.intent());
     }
@@ -253,7 +258,7 @@ class IntentRouterTest {
         when(intentLlmClient.chatSync(anyList()))
                 .thenReturn("{\"intent\":\"CHITCHAT\",\"confidence\":0.8}");
 
-        IntentResult result = router.route("查询一下", List.of());
+        IntentResult result = router.route("查询一下", List.of(), null, null);
 
         assertEquals(Intent.KNOWLEDGE_QA, result.intent());
         assertEquals("RULE", result.source());

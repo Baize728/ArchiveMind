@@ -91,6 +91,27 @@ public class TraceScope implements AutoCloseable {
                 null, message, 0, false);
     }
 
+    /**
+     * 记录 fallback 事件（T1-5）。
+     *
+     * @param stage   降级环节：intent / slot / clarify / chitchat / answer
+     * @param layer   兜底层级：rule / keyword / template / empty
+     * @param reason  降级原因
+     * @param output  兜底产物摘要
+     */
+    public void recordFallback(String stage, String layer, String reason, String output) {
+        String safeOutput = output == null ? "" : output.replace("\"", "\\\"");
+        String payload = String.format(
+                "{\"stage\":\"%s\",\"layer\":\"%s\",\"reason\":\"%s\",\"output\":\"%s\"}",
+                stage, layer, reason, safeOutput);
+        TraceEvent.Phase phase = switch (stage) {
+            case "intent" -> TraceEvent.Phase.INTENT;
+            case "slot", "clarify" -> TraceEvent.Phase.CLARIFY;
+            default -> TraceEvent.Phase.LLM;
+        };
+        add(TraceEvent.EventType.FALLBACK, phase, null, null, payload, 0, true);
+    }
+
     /** 记录意图识别结果（T1-1） */
     public void recordIntent(String userMessage, String intent, double confidence, String source) {
         String payload = String.format(

@@ -13,6 +13,8 @@ import com.zyh.archivemind.agent.AgentExecutor;
 import com.zyh.archivemind.intent.Intent;
 import com.zyh.archivemind.intent.IntentResult;
 import com.zyh.archivemind.intent.IntentRouter;
+import com.zyh.archivemind.fallback.FallbackContext;
+import com.zyh.archivemind.fallback.FallbackPolicyService;
 import com.zyh.archivemind.clarify.*;
 import com.zyh.archivemind.model.SessionState;
 import com.zyh.archivemind.trace.TraceCollector;
@@ -62,6 +64,7 @@ public class ChatHandler {
     private final SlotExtractor slotExtractor;
     private final ClarifyRuleService clarifyRuleService;
     private final ClarifyAgentService clarifyAgentService;
+    private final com.zyh.archivemind.fallback.FallbackPolicyService fallbackPolicyService;
 
     private final Map<String, StringBuilder> responseBuilders = new ConcurrentHashMap<>();
     private final Map<String, StringBuilder> thinkingBuilders = new ConcurrentHashMap<>();
@@ -88,7 +91,8 @@ public class ChatHandler {
                        SessionStateService sessionStateService,
                        SlotExtractor slotExtractor,
                        ClarifyRuleService clarifyRuleService,
-                       ClarifyAgentService clarifyAgentService) {
+                       ClarifyAgentService clarifyAgentService,
+                       com.zyh.archivemind.fallback.FallbackPolicyService fallbackPolicyService) {
         this.redisTemplate = redisTemplate;
         this.conversationSessionService = conversationSessionService;
         this.preferenceService = preferenceService;
@@ -103,6 +107,7 @@ public class ChatHandler {
         this.slotExtractor = slotExtractor;
         this.clarifyRuleService = clarifyRuleService;
         this.clarifyAgentService = clarifyAgentService;
+        this.fallbackPolicyService = fallbackPolicyService;
     }
 
     public void processMessage(String userId, String userMessage, WebSocketSession session) {
@@ -177,7 +182,7 @@ public class ChatHandler {
         traceScope.recordQueryRewrite(userMessage, rewrittenQuery, rewriteLatency);
 
         // ========== T1-2 3. 意图识别（用改写后的 query）==========
-        IntentResult intentResult = intentRouter.route(rewrittenQuery, history, state);
+        IntentResult intentResult = intentRouter.route(rewrittenQuery, history, state, traceScope);
         traceScope.recordIntent(rewrittenQuery, intentResult.intent().name(),
                 intentResult.confidence(), intentResult.source());
 
@@ -272,8 +277,22 @@ public class ChatHandler {
             @Override
             public void onComplete() {
                 TraceScope scope = traceScopeRef.get();
-                scope.recordAgentDuration(System.currentTimeMillis() - agentStartTime);
                 String traceId = scope.getTraceId();
+
+                // T1-5 空文本兜底（Q7/Q11）：正常完成空文本=故障；maxIter截断空文本=异常截断
+                String existing = responseBuilders.get(session.getId()).toString();
+                if (existing.isBlank()) {
+                    FallbackContext ctx = FallbackContext.builder()
+                            .stage("answer")
+                            .traceScope(scope)
+                            .error(null)
+                            .existingResponse(existing)
+                            .build();
+                    String template = (String) fallbackPolicyService.execute("answer", ctx);
+                    sendAnswerChunk(session, template);
+                }
+
+                scope.recordAgentDuration(System.currentTimeMillis() - agentStartTime);
                 scope.close();
                 finishResponse(session, convId, userId, userMessage, responseFuture, traceId);
             }
@@ -282,12 +301,30 @@ public class ChatHandler {
             public void onError(Throwable error) {
                 TraceScope scope = traceScopeRef.get();
                 String traceId = scope.getTraceId();
-                scope.recordError(error.getMessage());
+
+                // T1-5 答案生成断流兜底（Q7/Q9/Q10）
+                String existing = responseBuilders.get(session.getId()).toString();
+
+                // 清空半截 thinking——不存进历史、不渲染前端 ThinkingSection（Q10）
+                StringBuilder thinkingBuilder = thinkingBuilders.get(session.getId());
+                if (thinkingBuilder != null) thinkingBuilder.setLength(0);
+
+                // 调 FallbackPolicyService 获取模板（全空 vs 部分断流由 fallbackAnswer 内部判定）
+                FallbackContext ctx = FallbackContext.builder()
+                        .stage("answer")
+                        .traceScope(scope)
+                        .error(error)
+                        .existingResponse(existing)
+                        .build();
+                String template = (String) fallbackPolicyService.execute("answer", ctx);
+                sendAnswerChunk(session, template);
+
+                scope.recordAgentDuration(System.currentTimeMillis() - agentStartTime);
                 scope.close();
-                handleError(session, error, convId, userId, userMessage, traceId);
-                responseFuture.completeExceptionally(error);
-                cleanupSession(session.getId());
-                responseFutures.remove(session.getId());
+
+                // 走 finishResponse 正常收尾——内部已含 cleanupSession + responseFutures.remove + responseFuture.complete（Q9）
+                // 不走 handleError——避免前端置 error 态显示红字 + 避免 completeExceptionally 让前端判失败
+                finishResponse(session, convId, userId, userMessage, responseFuture, traceId);
             }
         });
     }
@@ -306,7 +343,7 @@ public class ChatHandler {
         List<String> finalMissing = List.of();
         try {
             // 1. 槽位抽取（用改写后的 query）
-            SlotBundle extracted = slotExtractor.extract(query);
+            SlotBundle extracted = slotExtractor.extract(query, traceScope);
             logger.info("[DEBUG-CLARIFY] extracted slots: {}", extracted);
             // 覆盖合并（Q19）：抽到即覆盖旧值，抽不到保留旧值
             SlotBundle merged = mergeSlots(state.slots(), extracted);
@@ -337,7 +374,7 @@ public class ChatHandler {
 
             // 5. LLM 生成追问
             result = clarifyAgentService.decide(
-                    query, merged, missing, state.clarifyTurn());
+                    query, merged, missing, state.clarifyTurn(), traceScope);
 
             // 6. ASK 时更新 state（Q18 计数 + Q13 lastAskedFields）
             if (result.action() == ClarifyResult.ClarifyAction.ASK) {
@@ -452,7 +489,12 @@ public class ChatHandler {
             );
             String reply = intentLlmClient.chatSync(messages);
             if (reply == null || reply.isBlank()) {
-                reply = "你好！我是ArchiveMind知识助手，有什么可以帮您查询的吗？";
+                // T1-5：闲聊兜底走 FallbackPolicyService（Q5/Q12）
+                FallbackContext ctx = FallbackContext.builder()
+                        .stage("chitchat")
+                        .traceScope(traceScope)
+                        .build();
+                reply = (String) fallbackPolicyService.execute("chitchat", ctx);
             }
 
             // 一次性推送回复
@@ -646,7 +688,7 @@ public class ChatHandler {
                              String conversationId, String userId, String userMessage,
                              String traceId) {
         logger.error("AI服务错误: {}", error.getMessage(), error);
-        String fallbackReply = "AI服务暂时不可用，请稍后重试";
+        String fallbackReply = aiProperties.getFallback().getErrorTemplate();
         try {
             Map<String, Object> errorFrame = new LinkedHashMap<>();
             errorFrame.put("error", fallbackReply);
