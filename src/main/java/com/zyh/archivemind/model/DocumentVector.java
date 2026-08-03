@@ -46,17 +46,10 @@ public class DocumentVector {
     private boolean isPublic = false;
 
     /**
-     * 父块 ID，用于 Small-to-Big 检索时回溯父块上下文。
-     * 同一父块下的子块共享相同的 parentChunkId。
-     */
-    @Column(name = "parent_chunk_id")
-    private Integer parentChunkId;
-
-    /**
-     * 父块完整文本内容（建议 2048-4096 字符）。
-     * 检索时子块命中后，通过此字段回取父块完整上下文给 LLM。
+     * 上下文增强后的文本内容（上下文前缀 + 原始 chunk）。
+     * 用于 embedding 和 BM25 检索，原始文本仍由 textContent 保留。
      */
     @Lob
-    @Column(name = "parent_text")
-    private String parentText;
+    @Column(name = "contextualized_content")
+    private String contextualizedContent;
 }

@@ -13,8 +13,9 @@ public class EsDocument {
     private String id;             // 文档唯一标识
     private String fileMd5;        // 文件指纹
     private Integer chunkId;       // 文本分块序号
-    private String textContent;    // 文本内容
-    private float[] vector;        // 向量数据（768维）
+    private String textContent;              // 原始文本（传给 LLM 生成）
+    private String contextualizedContent;    // 上下文增强文本（用于检索：KNN+BM25）
+    private float[] vector;                  // 向量数据（2048维）
     private String modelVersion;   // 向量生成模型版本
     private String userId;         // 上传用户ID
     private String orgTag;         // 组织标签
@@ -29,13 +30,24 @@ public class EsDocument {
     /**
      * 完整构造函数，包含权限字段
      */
-    public EsDocument(String id, String fileMd5, int chunkId, String content, 
-                     float[] vector, String modelVersion, 
+    public EsDocument(String id, String fileMd5, int chunkId, String content,
+                     float[] vector, String modelVersion,
+                     String userId, String orgTag, boolean isPublic) {
+        this(id, fileMd5, chunkId, content, null, vector, modelVersion, userId, orgTag, isPublic);
+    }
+
+    /**
+     * 完整构造函数，包含上下文增强内容。
+     */
+    public EsDocument(String id, String fileMd5, int chunkId, String textContent,
+                     String contextualizedContent,
+                     float[] vector, String modelVersion,
                      String userId, String orgTag, boolean isPublic) {
         this.id = id;
         this.fileMd5 = fileMd5;
         this.chunkId = chunkId;
-        this.textContent = content;
+        this.textContent = textContent;
+        this.contextualizedContent = contextualizedContent;
         this.vector = vector;
         this.modelVersion = modelVersion;
         this.userId = userId;

@@ -117,10 +117,11 @@ embedding:
 # ---------------- 文件解析 ----------------
 file:
   parsing:
-    chunk-size: ${FILE_CHUNK_SIZE:1000}
-    parent-chunk-size: ${FILE_PARENT_CHUNK_SIZE:1048576}
+    chunk-size: ${FILE_CHUNK_SIZE:1200}
     buffer-size: ${FILE_BUFFER_SIZE:8192}
     max-memory-threshold: ${FILE_MAX_MEMORY:0.8}
+    temp-dir: ${FILE_TEMP_DIR:${java.io.tmpdir}/archivemind}
+    max-text-length: ${FILE_MAX_TEXT_LENGTH:250000}
 
 # ---------------- JWT ----------------
 jwt:

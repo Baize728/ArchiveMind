@@ -62,7 +62,9 @@ public class RerankerService {
         long start = System.currentTimeMillis();
         try {
             List<String> documents = candidates.stream()
-                    .map(SearchResult::getTextContent)
+                    .map(r -> r.getContextualizedContent() != null
+                            ? r.getContextualizedContent()
+                            : r.getTextContent())
                     .toList();
 
             List<Double> scores = callReranker(query, documents);

@@ -52,23 +52,26 @@ public class VectorizationService {
                 return;
             }
 
-            // 提取文本内容
+            // 提取上下文增强文本用于 embedding（Contextual Retrieval）
             List<String> texts = chunks.stream()
-                    .map(TextChunk::getContent)
+                    .map(c -> c.getContextualizedContent() != null
+                            ? c.getContextualizedContent()
+                            : c.getContent())
                     .toList();
 
             // 调用外部模型生成向量
             List<float[]> vectors = embeddingClient.embed(texts);
 
-            // 构建 Elasticsearch 文档并存储
+            // 构建 Elasticsearch 文档并存储（含上下文增强字段）
             List<EsDocument> esDocuments = IntStream.range(0, chunks.size())
                     .mapToObj(i -> new EsDocument(
                             UUID.randomUUID().toString(),
                             fileMd5,
                             chunks.get(i).getChunkId(),
-                            chunks.get(i).getContent(),
+                            chunks.get(i).getContent(),              // textContent 原始文本
+                            chunks.get(i).getContextualizedContent(), // contextualizedContent 增强文本
                             vectors.get(i),
-                            modelVersion,        // 从配置读取，如 text-embedding-v4
+                            modelVersion,
                             userId,
                             orgTag,
                             isPublic
@@ -95,11 +98,12 @@ public class VectorizationService {
         // 调用 Repository 查询数据
         List<DocumentVector> vectors = documentVectorRepository.findByFileMd5(fileMd5);
 
-        // 转换为 TextChunk 列表
+        // 转换为 TextChunk 列表（含上下文增强内容）
         return vectors.stream()
                 .map(vector -> new TextChunk(
                         vector.getChunkId(),
-                        vector.getTextContent()
+                        vector.getTextContent(),
+                        vector.getContextualizedContent()
                 ))
                 .toList();
     }

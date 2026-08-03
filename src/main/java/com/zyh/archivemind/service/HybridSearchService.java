@@ -7,10 +7,8 @@ import com.zyh.archivemind.entity.EsDocument;
 import com.zyh.archivemind.entity.SearchResult;
 import com.zyh.archivemind.model.User;
 import com.zyh.archivemind.exception.CustomException;
-import com.zyh.archivemind.model.DocumentVector;
 import com.zyh.archivemind.repository.UserRepository;
 import com.zyh.archivemind.repository.FileUploadRepository;
-import com.zyh.archivemind.repository.DocumentVectorRepository;
 import com.zyh.archivemind.model.FileUpload;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -26,7 +24,8 @@ import java.util.stream.Collectors;
 /**
  * 混合搜索服务 —— 企业级 RAG 检索管道。
  *
- * 检索管道：RRF 粗排 → 权限过滤 → Reranker 精排 → Parent-Child 上下文回溯。
+ * 检索管道：RRF 粗排 → 权限过滤 → Reranker 精排。
+ * Contextual Retrieval: KNN/BM25 检索 contextualizedContent，返回 textContent 给 LLM。
  * 相比旧版 rescore 线性加权，RRF 天然免疫 KNN 与 BM25 的分数尺度差异。
  */
 @Service
@@ -53,19 +52,16 @@ public class HybridSearchService {
     private FileUploadRepository fileUploadRepository;
 
     @Autowired
-    private DocumentVectorRepository documentVectorRepository;
-
-    @Autowired
     private OrgTagCacheService orgTagCacheService;
 
     @Value("${retrieval.recall-size:50}")
     private int recallSize;
 
     /**
-     * 企业级混合搜索——RRF 融合 + Reranker 精排 + Parent-Child 回溯 + 权限过滤。
+     * 企业级混合搜索——RRF 融合 + Reranker 精排 + 权限过滤。
      *
-     * 管道：KNN + BM25 分别检索 → RRF 融合同一轮候选 → 权限过滤 →
-     *       Reranker Cross-Encoder 精排 → Parent-Child 上下文回溯 → 返回
+     * 管道：KNN + BM25 分别检索 contextualizedContent → RRF 融合同一轮候选 → 权限过滤 →
+     *       Reranker Cross-Encoder 精排 → 返回 textContent 原始文本
      */
     public List<SearchResult> searchWithPermission(String query, String userId, int topK) {
         logger.debug("企业级混合搜索启动, query={}, userId={}, topK={}", query, userId, topK);
@@ -93,11 +89,9 @@ public class HybridSearchService {
             List<SearchResult> reranked = rerankerService.rerank(query, rrfResults, topK);
             logger.debug("Reranker 精排完成，返回: {} 条", reranked.size());
 
-            // === 阶段 3: Parent-Child 上下文回溯 ===
-            List<SearchResult> resolved = resolveParentContext(reranked);
-
-            attachFileNames(resolved);
-            return resolved;
+            // === 阶段 3: 补充文件名后返回 ===
+            attachFileNames(reranked);
+            return reranked;
 
         } catch (Exception e) {
             logger.error("混合搜索失败", e);
@@ -154,6 +148,7 @@ public class HybridSearchService {
                     EsDocument doc = docMap.get(e.getKey());
                     return new SearchResult(
                             doc.getFileMd5(), doc.getChunkId(), doc.getTextContent(),
+                            doc.getContextualizedContent(),
                             e.getValue(),
                             doc.getUserId(), doc.getOrgTag(), doc.isPublic()
                     );
@@ -171,7 +166,7 @@ public class HybridSearchService {
                 s.knn(kn -> kn.field("vector").queryVector(queryVector)
                         .k(k).numCandidates(k * 2));
                 s.query(q -> q.bool(b -> {
-                    b.should(sh -> sh.match(m -> m.field("textContent").query(query)));
+                    b.should(sh -> sh.match(m -> m.field("contextualizedContent").query(query)));
                     b.filter(f -> f.bool(bf -> {
                         buildPermissionFilter(bf, userDbId, userEffectiveTags);
                         return bf;
@@ -195,7 +190,7 @@ public class HybridSearchService {
             SearchResponse<EsDocument> resp = esClient.search(s -> {
                 s.index("knowledge_base");
                 s.query(q -> q.bool(b -> {
-                    b.must(m -> m.match(ma -> ma.field("textContent").query(query)));
+                    b.must(m -> m.match(ma -> ma.field("contextualizedContent").query(query)));
                     b.filter(f -> f.bool(bf -> {
                         buildPermissionFilter(bf, userDbId, userEffectiveTags);
                         return bf;
@@ -210,59 +205,6 @@ public class HybridSearchService {
             logger.error("BM25 搜索失败", e);
             return Collections.emptyList();
         }
-    }
-
-    // ===================== Parent-Child 上下文回溯 =====================
-
-    /**
-     * Parent-Child 上下文回溯。
-     * 检索命中子块后，通过 parentChunkId 回取父块完整文本，同一父块的多个命中去重合并。
-     * 父块提供子块缺失的跨段落上下文（指代消解、逻辑链、表格完整性等）。
-     */
-    private List<SearchResult> resolveParentContext(List<SearchResult> raw) {
-        if (raw == null || raw.isEmpty()) return Collections.emptyList();
-
-        // 收集所有 (fileMd5, chunkId) 对
-        Set<String> md5s = raw.stream().map(SearchResult::getFileMd5).collect(Collectors.toSet());
-        Set<Integer> chunkIds = raw.stream().map(SearchResult::getChunkId).collect(Collectors.toSet());
-
-        List<DocumentVector> vectors;
-        try {
-            vectors = documentVectorRepository.findByFileMd5InAndChunkIdIn(
-                    new ArrayList<>(md5s), new ArrayList<>(chunkIds));
-        } catch (Exception e) {
-            logger.warn("Parent-Child 回溯查询失败，使用原始子块: {}", e.getMessage());
-            return raw;
-        }
-
-        // 构建 (fileMd5:chunkId) → DocumentVector 映射
-        Map<String, DocumentVector> vecMap = vectors.stream()
-                .collect(Collectors.toMap(
-                        v -> v.getFileMd5() + ":" + v.getChunkId(),
-                        v -> v, (a, b) -> a));
-
-        // 去重：同一 (fileMd5, parentChunkId) 只保留一条，用父块文本替换子块
-        Map<String, SearchResult> deduped = new LinkedHashMap<>();
-        for (SearchResult r : raw) {
-            DocumentVector dv = vecMap.get(r.getFileMd5() + ":" + r.getChunkId());
-            if (dv != null && dv.getParentChunkId() != null && dv.getParentText() != null) {
-                String parentKey = r.getFileMd5() + ":parent:" + dv.getParentChunkId();
-                if (!deduped.containsKey(parentKey)) {
-                    r.setTextContent(dv.getParentText());  // 替换为父块完整文本
-                    deduped.put(parentKey, r);
-                }
-                // 如果已经存在，跳过（去重）
-            } else {
-                // 无父块信息，保留原样
-                deduped.put(r.getFileMd5() + ":" + r.getChunkId(), r);
-            }
-        }
-
-        List<SearchResult> resolved = new ArrayList<>(deduped.values());
-        if (raw.size() != resolved.size()) {
-            logger.debug("Parent 回溯去重: {} → {}", raw.size(), resolved.size());
-        }
-        return resolved;
     }
 
     // ===================== 权限过滤 =====================
@@ -289,7 +231,7 @@ public class HybridSearchService {
             SearchResponse<EsDocument> response = esClient.search(s -> s
                     .index("knowledge_base")
                     .query(q -> q.bool(b -> {
-                        b.must(m -> m.match(ma -> ma.field("textContent").query(query)));
+                        b.must(m -> m.match(ma -> ma.field("contextualizedContent").query(query)));
                         b.filter(f -> f.bool(bf -> {
                             buildPermissionFilter(bf, userDbId, userEffectiveTags);
                             return bf;
