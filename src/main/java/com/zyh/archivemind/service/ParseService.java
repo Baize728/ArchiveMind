@@ -1,19 +1,13 @@
 package com.zyh.archivemind.service;
 
-import com.zyh.archivemind.exception.OcrRequiredException;
 import com.zyh.archivemind.model.DocumentVector;
 import com.zyh.archivemind.repository.DocumentVectorRepository;
-import org.apache.tika.exception.TikaException;
-import org.apache.tika.metadata.Metadata;
-import org.apache.tika.parser.ParseContext;
-import org.apache.tika.parser.AutoDetectParser;
-import org.apache.tika.sax.BodyContentHandler;
+import com.zyh.archivemind.service.LlamaParseClient.LlamaParseException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import org.xml.sax.SAXException;
 
 import java.io.*;
 import java.nio.file.Files;
@@ -24,6 +18,8 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import jakarta.annotation.PostConstruct;
 import com.hankcs.hanlp.seg.common.Term;
@@ -32,21 +28,18 @@ import com.hankcs.hanlp.tokenizer.StandardTokenizer;
 /**
  * 文档解析服务 —— Contextual Retrieval 管道入口。
  *
- * 管道：MinIO InputStream → 本地 temp file → Tika 流式提取 → 输出 temp file →
- *       OCR 扫描件检测 → 结构判断 → 大小判断 → 单层语义切分 → 逐 chunk 上下文生成 → 批量入库。
+ * 管道：MinIO InputStream → 本地 temp file → LlamaParse API（VLM 驱动）→ 结构化 Markdown →
+ *       扫描件/OCR 检测 → 结构判断 → 大小路由 → 语义切分（段落→句子→HanLP）→
+ *       逐 chunk 上下文生成 → 批量入库。
  *
- * JVM 内存安全：Tika 流式 + 磁盘落盘，O(1) 内存占用。
+ * LlamaParse 替代了 Tika 提取，输出带 Markdown 标题/段落结构的文本，
+ * 使现有语义切分管线能正确检测到段落边界和标题层级。
+ * 扫描件由 LlamaParse VLM 自动 OCR 处理，不再直接拒收。
  */
 @Service
 public class ParseService {
 
     private static final Logger logger = LoggerFactory.getLogger(ParseService.class);
-
-    /** 扫描件检测：文本总长度阈值（< 50 中文字符视为扫描件） */
-    private static final int MIN_SCANNED_TEXT_LENGTH = 50;
-
-    /** 扫描件检测：每页文本密度阈值（< 50 字符/页视为扫描件） */
-    private static final double MIN_TEXT_DENSITY_PER_PAGE = 50.0;
 
     /** 自包含 chunk 跳过 LLM 上下文生成的长度阈值（≤ 200 字不调 LLM） */
     private static final int CONTEXT_MIN_CHUNK_LENGTH = 200;
@@ -56,6 +49,9 @@ public class ParseService {
 
     @Autowired
     private ContextGenerator contextGenerator;
+
+    @Autowired
+    private LlamaParseClient llamaParseClient;
 
     @Autowired
     private DocumentStructureDetector structureDetector;
@@ -77,7 +73,6 @@ public class ParseService {
 
     /**
      * 应用启动时清理残留的临时文件（处理异常中断的遗留物）。
-     * 删除超过 24 小时的 temp file，目录不存在则跳过。
      */
     @PostConstruct
     public void cleanupZombieTempFiles() {
@@ -106,206 +101,112 @@ public class ParseService {
     }
 
     /**
-     * 流式解析文件并入库（Contextual Retrieval 管道）。
+     * 解析文件并入库（Contextual Retrieval 管道）。
      *
      * @param fileMd5    文件的MD5哈希值
      * @param fileStream 文件输入流
      * @param userId     上传用户ID
      * @param orgTag     组织标签
      * @param isPublic   是否公开
-     * @throws IOException     文件读取错误
-     * @throws TikaException   文件解析错误
-     * @throws OcrRequiredException 扫描件/图片PDF，Tika无法提取有效文本
+     * @throws IOException     文件读写错误
+     * @throws LlamaParseException LlamaParse 解析失败
      */
     public void parseAndSave(String fileMd5, InputStream fileStream,
-            String userId, String orgTag, boolean isPublic) throws IOException, TikaException {
+            String userId, String orgTag, boolean isPublic) throws IOException {
         logger.info("开始 Contextual Retrieval 管道解析，fileMd5: {}, userId: {}, orgTag: {}, isPublic: {}",
                 fileMd5, userId, orgTag, isPublic);
 
         checkMemoryThreshold();
 
-        Path inputTempFile = null;
-        Path outputTempFile = null;
+        Path tempFile = null;
 
         try {
             // Phase A: 确保 temp dir 存在
             Files.createDirectories(Paths.get(tempDir));
 
-            // Phase B: MinIO InputStream → 本地 input temp file
-            inputTempFile = Files.createTempFile(Paths.get(tempDir), "tika-in-", ".tmp");
-            try (FileOutputStream fos = new FileOutputStream(inputTempFile.toFile())) {
+            // Phase B: MinIO InputStream → 本地 temp file
+            tempFile = Files.createTempFile(Paths.get(tempDir), "llamaparse-in-", ".tmp");
+            try (FileOutputStream fos = new FileOutputStream(tempFile.toFile())) {
                 byte[] buf = new byte[bufferSize];
                 int read;
                 while ((read = fileStream.read(buf)) != -1) {
                     fos.write(buf, 0, read);
                 }
             }
-            logger.debug("输入临时文件写入完成: {} ({} bytes)", inputTempFile, Files.size(inputTempFile));
-
-            // Phase C: Tika 流式提取 → output temp file
-            outputTempFile = Files.createTempFile(Paths.get(tempDir), "tika-out-", ".tmp");
-            Metadata metadata = extractTextWithTika(inputTempFile, outputTempFile);
+            logger.debug("输入临时文件写入完成: {} ({} bytes)", tempFile, Files.size(tempFile));
 
             checkMemoryThreshold();
 
-            // Phase D: 读取提取文本
-            String extractedText = Files.readString(outputTempFile);
+            // Phase C: LlamaParse 云端解析 → 结构化 Markdown（替代 Tika 提取）
+            String extractedText = llamaParseClient.parse(tempFile);
+            logger.info("LlamaParse 解析完成, fileMd5: {}, 文本长度: {} chars", fileMd5, extractedText.length());
 
-            // Phase E: 扫描件/图片 PDF 双重检测
-            checkScannedDocument(extractedText, metadata);
+            // Phase D: 扫描件/低质量文档检测（仅告警，不拦截）
+            // LlamaParse VLM 模式下会自动 OCR 扫描件，此检测仅用于日志监控
+            if (extractedText.trim().length() < 50) {
+                logger.warn("LlamaParse 提取文本极短 ({} chars)，文档可能为纯图片/空白页/非文字内容",
+                        extractedText.trim().length());
+            }
 
-            // Phase F: 文档结构判断 + 大小判断 → 选择处理路径
-            List<String> documentUnits = resolveDocumentUnits(extractedText, metadata);
+            // Phase E: 文档结构判断 + 大小判断 → 选择处理路径
+            List<String> documentUnits = resolveDocumentUnits(extractedText);
 
-            // Phase G: 对每个文档单元执行单层切分 + 上下文生成 + 入库
+            // 超大且无结构文档 → LLM 上下文用 CCH 固定前缀替代全文
+            String llmContext = extractedText;
+            if (extractedText.length() > maxTextLength
+                    && !structureDetector.hasStructure(extractedText)) {
+                llmContext = buildCchContext(extractedText);
+                logger.info("CCH 降级: LLM 上下文切换为固定前缀 ({} chars)", llmContext.length());
+            }
+
+            // Phase F: 对每个文档单元执行语义切分 + 上下文生成 + 入库
             int totalChunks = 0;
             int chunkSeq = 0;
             for (String docUnit : documentUnits) {
                 List<String> chunks = splitTextIntoChunksWithSemantics(docUnit, chunkSize);
+                // 有结构/未超限：用文档原文；CCH 降级：用固定前缀
+                String contextForLlm = (extractedText.length() > maxTextLength
+                        && !structureDetector.hasStructure(extractedText))
+                        ? llmContext : docUnit;
                 chunkSeq = processChunksWithContext(
                         fileMd5, userId, orgTag, isPublic,
-                        chunks, docUnit, chunkSeq);
+                        chunks, contextForLlm, chunkSeq);
                 totalChunks += chunks.size();
             }
 
             logger.info("Contextual Retrieval 管道完成，fileMd5: {}, 总chunk数: {}", fileMd5, totalChunks);
 
-        } catch (OcrRequiredException e) {
-            throw e; // 直接上抛，由上层处理（拒收/转OCR队列）
-        } catch (SAXException e) {
-            logger.error("Tika 解析失败，fileMd5: {}", fileMd5, e);
-            throw new RuntimeException("文档解析失败", e);
+        } catch (LlamaParseException e) {
+            logger.error("LlamaParse 解析失败，fileMd5: {}", fileMd5, e);
+            throw new RuntimeException("文档解析失败（LlamaParse）", e);
         } finally {
-            // Phase H: 清理临时文件
-            deleteTempFile(inputTempFile);
-            deleteTempFile(outputTempFile);
+            // Phase G: 清理临时文件
+            deleteTempFile(tempFile);
         }
     }
 
     /**
      * 兼容旧版本的解析方法。
      */
-    public void parseAndSave(String fileMd5, InputStream fileStream) throws IOException, TikaException {
+    public void parseAndSave(String fileMd5, InputStream fileStream) throws IOException {
         parseAndSave(fileMd5, fileStream, "unknown", "DEFAULT", false);
-    }
-
-    // ===================== Tika 流式提取 =====================
-
-    /**
-     * 使用 Apache Tika 从输入文件流式提取文本到输出文件。
-     * StreamingContentHandler 逐段写入 BufferedWriter，JVM 内存 O(1)。
-     *
-     * @param inputFile  原始文件路径（用于 Tika 检测格式）
-     * @param outputFile 提取文本的输出路径
-     * @return Tika 解析产生的 Metadata（含页数、heading 信息等）
-     */
-    private Metadata extractTextWithTika(Path inputFile, Path outputFile)
-            throws IOException, SAXException, TikaException {
-        Metadata metadata = new Metadata();
-        ParseContext context = new ParseContext();
-        AutoDetectParser parser = new AutoDetectParser();
-
-        try (BufferedWriter writer = new BufferedWriter(
-                new OutputStreamWriter(new FileOutputStream(outputFile.toFile()), "UTF-8"), bufferSize);
-             InputStream fis = new BufferedInputStream(new FileInputStream(inputFile.toFile()), bufferSize)) {
-
-            StreamingContentHandler handler = new StreamingContentHandler(writer);
-            parser.parse(fis, handler, metadata, context);
-            writer.flush();
-        }
-
-        long extractedSize = Files.size(outputFile);
-        logger.info("Tika 文本提取完成: {} bytes", extractedSize);
-        return metadata;
-    }
-
-    /**
-     * 流式内容处理器：将 Tika 提取的文本逐段写入磁盘，不驻留 JVM 堆。
-     */
-    private static class StreamingContentHandler extends BodyContentHandler {
-        private final BufferedWriter writer;
-
-        StreamingContentHandler(BufferedWriter writer) {
-            super(-1); // 禁用 Tika 内部写入限制
-            this.writer = writer;
-        }
-
-        @Override
-        public void characters(char[] ch, int start, int length) {
-            try {
-                writer.write(ch, start, length);
-            } catch (IOException e) {
-                throw new UncheckedIOException("写入输出临时文件失败", e);
-            }
-        }
-    }
-
-    // ===================== 扫描件检测 =====================
-
-    /**
-     * 双重信号检测扫描件/图片 PDF。
-     * 信号1：文本总长度 < 50 字；信号2：每页文本密度 < 50 字/页。任一命中即拦截。
-     */
-    private void checkScannedDocument(String extractedText, Metadata metadata) {
-        int textLength = extractedText.trim().length();
-        int pageCount = extractPageCount(metadata);
-        double textPerPage = pageCount > 0 ? (double) textLength / pageCount : textLength;
-
-        boolean textTooShort = textLength < MIN_SCANNED_TEXT_LENGTH;
-        boolean densityTooLow = textPerPage < MIN_TEXT_DENSITY_PER_PAGE;
-
-        if (textTooShort || densityTooLow) {
-            String reason = String.format(
-                    "扫描件/图片PDF检测拦截: 文本总长度=%d字 (阈值%d), 页数=%d, 文本密度=%.1f字/页 (阈值%.0f)",
-                    textLength, MIN_SCANNED_TEXT_LENGTH, pageCount, textPerPage, MIN_TEXT_DENSITY_PER_PAGE);
-            logger.warn(reason);
-            throw new OcrRequiredException(reason, textLength, pageCount, textPerPage);
-        }
-
-        logger.debug("扫描件检测通过: 文本长度={}, 页数={}, 密度={:.1f}字/页",
-                textLength, pageCount, textPerPage);
-    }
-
-    /** 从 Tika Metadata 中提取页数 */
-    private int extractPageCount(Metadata metadata) {
-        String npages = metadata.get("xmpTPg:NPages");
-        if (npages != null && !npages.isEmpty()) {
-            try {
-                return Integer.parseInt(npages);
-            } catch (NumberFormatException ignored) {
-            }
-        }
-        String pageCount = metadata.get("Page-Count");
-        if (pageCount != null && !pageCount.isEmpty()) {
-            try {
-                return Integer.parseInt(pageCount);
-            } catch (NumberFormatException ignored) {
-            }
-        }
-        // PDF 和 Word 至少 1 页
-        String contentType = metadata.get("Content-Type");
-        if (contentType != null && contentType.contains("pdf")) {
-            return 1; // PDF 默认至少1页
-        }
-        return 1;
     }
 
     // ===================== 文档单元拆分 =====================
 
     /**
      * 根据文档结构和文本长度，决定处理单元。
-     * ≤ 25万字符 → 完整文档；> 25万字符且有结构 → 按章拆分子文档；> 25万字符无结构 → CCH 降级。
+     * ≤ 25万字符 → 完整文档；> 25万字符且有结构 → 按章拆分子文档；> 25万字符无结构 → 全文（调用方负责切换 CCH 上下文）。
      *
      * @return 文档单元列表（每个元素独立走切分+上下文生成）
      */
-    private List<String> resolveDocumentUnits(String fullText, Metadata metadata) {
+    private List<String> resolveDocumentUnits(String fullText) {
         if (fullText.length() <= maxTextLength) {
             logger.debug("文档大小 {} 字，未超限，完整文档走标准路径", fullText.length());
             return List.of(fullText);
         }
 
-        // 超限：检查结构
-        boolean hasStructure = structureDetector.hasStructure(fullText, metadata);
+        boolean hasStructure = structureDetector.hasStructure(fullText);
         logger.info("文档超限 ({} > {}), 结构检测: {}", fullText.length(), maxTextLength,
                 hasStructure ? "有结构-按章拆分" : "无结构-CCH降级");
 
@@ -315,33 +216,41 @@ public class ParseService {
             return chapters;
         }
 
-        // CCH 降级：文件名 + Tika 元数据作为文档上下文
-        String cchContext = buildCchContext(metadata);
-        logger.info("CCH 降级: 使用固定前缀 '{}...' 作为文档上下文", cchContext.substring(0, Math.min(50, cchContext.length())));
+        // CCH 降级：由调用方 parseAndSave 负责将 llmContext 替换为 CCH 固定前缀
         return List.of(fullText);
     }
 
     /**
      * CCH（Contextual Chunk Headers）降级上下文。
-     * 当文档无章节结构时，用文件名和 Tika 元数据拼接为固定前缀，零 LLM 开销。
+     * 当文档无章节结构时，从 Markdown 文本中提取元信息作为固定前缀，零 LLM 开销。
      */
-    private String buildCchContext(Metadata metadata) {
+    private String buildCchContext(String fullText) {
         StringBuilder sb = new StringBuilder();
-        String title = metadata.get("title");
-        if (title != null && !title.isBlank()) {
-            sb.append("文档标题: ").append(title).append("。");
+        // 从 LlamaParse Markdown 输出中提取一级标题作为文档标题
+        Pattern h1Pattern = Pattern.compile("(?m)^#[^#].*");
+        Matcher m = h1Pattern.matcher(fullText);
+        if (m.find()) {
+            sb.append("文档标题: ").append(m.group().substring(1).trim()).append("。");
         }
-        String author = metadata.get("author");
-        if (author != null && !author.isBlank()) {
-            sb.append("作者: ").append(author).append("。");
+        // 提取二级标题作为章节概览
+        Pattern h2Pattern = Pattern.compile("(?m)^##[^#].*");
+        Matcher m2 = h2Pattern.matcher(fullText);
+        List<String> sections = new ArrayList<>();
+        while (m2.find()) {
+            sections.add(m2.group().substring(2).trim());
         }
-        String contentType = metadata.get("Content-Type");
-        if (contentType != null && !contentType.isBlank()) {
-            sb.append("类型: ").append(contentType).append("。");
+        if (!sections.isEmpty()) {
+            sb.append("包含章节: ").append(String.join("、", sections.subList(0, Math.min(5, sections.size()))));
+            if (sections.size() > 5) {
+                sb.append("等");
+            }
+            sb.append("。");
         }
-        int pageCount = extractPageCount(metadata);
-        if (pageCount > 0) {
-            sb.append("共 ").append(pageCount).append(" 页。");
+        // 提取第一个一级编号标题作为补充
+        Pattern numH1 = Pattern.compile("(?m)^\\d+\\.(?!\\d)");
+        Matcher m3 = numH1.matcher(fullText);
+        if (m3.find() && sections.isEmpty()) {
+            sb.append("首个章节: ").append(m3.group().trim()).append("。");
         }
         return sb.toString();
     }
@@ -351,11 +260,11 @@ public class ParseService {
     /**
      * 对 chunk 列表逐条生成上下文前缀（如需要），然后批量写入 MySQL。
      *
-     * @param fileMd5      文件指纹
-     * @param userId       用户ID
-     * @param orgTag       组织标签
-     * @param isPublic     是否公开
-     * @param chunks       文本 chunk 列表
+     * @param fileMd5         文件指纹
+     * @param userId          用户ID
+     * @param orgTag          组织标签
+     * @param isPublic        是否公开
+     * @param chunks          文本 chunk 列表
      * @param documentContext 完整文档文本（用作 LLM 上下文参考）
      * @param startingChunkId chunk 起始序号
      * @return 保存后的最终 chunk 序号
@@ -449,7 +358,12 @@ public class ParseService {
 
     /**
      * 智能文本分割，保持语义完整性。
-     * 按段落 → 句子 → HanLP 分词的层级递进切分。
+     * LlamaParse Markdown 输出已包含段落边界（\n\n），
+     * 此方法按 段落 → 句子 → HanLP 分词的层级递进切分。
+     *
+     * @param text      LlamaParse 返回的结构化 Markdown 文本
+     * @param chunkSize chunk 目标大小（字符数）
+     * @return chunk 列表
      */
     private List<String> splitTextIntoChunksWithSemantics(String text, int chunkSize) {
         List<String> chunks = new ArrayList<>();
@@ -459,6 +373,10 @@ public class ParseService {
         StringBuilder currentChunk = new StringBuilder();
 
         for (String paragraph : paragraphs) {
+            if (paragraph.isBlank()) {
+                continue;
+            }
+
             if (paragraph.length() > chunkSize) {
                 if (currentChunk.length() > 0) {
                     chunks.add(currentChunk.toString().trim());
@@ -554,7 +472,7 @@ public class ParseService {
         } catch (Exception e) {
             logger.warn("HanLP分词异常: {}, 使用字符分割作为备用方案", e.getMessage());
             chunks = splitByCharacters(sentence, chunkSize);
-         }
+        }
 
         return chunks;
     }

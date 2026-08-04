@@ -1,6 +1,5 @@
 package com.zyh.archivemind.service;
 
-import org.apache.tika.metadata.Metadata;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -12,7 +11,7 @@ import java.util.regex.Pattern;
 
 /**
  * 文档结构检测器。
- * 通过 Tika metadata（OOXML/HTML）或正则扫描（PDF/纯文本）判断文档是否有章节结构，
+ * 通过 Markdown 标题（LlamaParse 输出）或正则扫描判断文档是否有章节结构，
  * 并支持按章节标题拆分超大文档。
  */
 @Service
@@ -27,8 +26,14 @@ public class DocumentStructureDetector {
     private static final Pattern[] CHAPTER_PATTERNS = {
         // 第N章 / 第N节 / 第N部分
         Pattern.compile("第[一二三四五六七八九十百千\\d]+[章节部分篇]"),
-        // N.N / N.N.N 编号标题
-        Pattern.compile("^\\d+\\.\\d+"),
+        // N. 单级编号标题（行首，如 "1. 概述"）
+        Pattern.compile("^\\d+\\.(?!\\d)", Pattern.MULTILINE),
+        // N.N 二级编号标题（如 "1.1 背景"）
+        Pattern.compile("^\\d+\\.\\d+", Pattern.MULTILINE),
+        // N.N.N 三级编号标题（如 "1.1.1 细节"）
+        Pattern.compile("^\\d+\\.\\d+\\.\\d+", Pattern.MULTILINE),
+        // 一、二、三、 中文顿号编号
+        Pattern.compile("^[一二三四五六七八九十]+、", Pattern.MULTILINE),
         // Chapter N / Section N
         Pattern.compile("Chapter\\s+\\d+", Pattern.CASE_INSENSITIVE),
         Pattern.compile("Section\\s+\\d+", Pattern.CASE_INSENSITIVE),
@@ -36,24 +41,24 @@ public class DocumentStructureDetector {
 
     /**
      * 综合判断文档是否有结构。
-     * OOXML/HTML 类文件从 Tika metadata 获取 heading 信息；
-     * PDF/纯文本类使用正则扫描章节标题模式。
+     * 优先检测 Markdown 标题（LlamaParse 输出），其次正则扫描章节标题。
      *
-     * @param fullText  提取出的完整文本
-     * @param metadata  Tika 解析产生的元数据
+     * @param fullText 提取出的完整文本（LlamaParse Markdown 输出）
      * @return true 表示有章节结构，false 表示无结构
      */
-    public boolean hasStructure(String fullText, Metadata metadata) {
-        // 路径1：OOXML/HTML 等有 heading 层级的格式，从 metadata 判断
-        if (hasHeadingMetadata(metadata)) {
-            logger.debug("通过 Tika metadata 判断为有结构文档");
+    public boolean hasStructure(String fullText) {
+        // 路径1：Markdown 标题（LlamaParse 自动生成，# ## ### 等）
+        int mdHeadingCount = countMarkdownHeadings(fullText);
+        if (mdHeadingCount >= MIN_CHAPTER_COUNT) {
+            logger.debug("通过 Markdown 标题判断为有结构文档（{} 个标题）", mdHeadingCount);
             return true;
         }
 
-        // 路径2：PDF/纯文本，正则扫描章节标题
+        // 路径2：正则扫描章节标题
         int matchCount = countChapterPatterns(fullText);
         boolean hasStructure = matchCount >= MIN_CHAPTER_COUNT;
-        logger.debug("正则扫描章节标题匹配数: {}, 判定有结构: {}", matchCount, hasStructure);
+        logger.debug("正则扫描章节标题匹配数: {}, Markdown标题数: {}, 判定有结构: {}",
+                matchCount, mdHeadingCount, hasStructure);
         return hasStructure;
     }
 
@@ -65,19 +70,38 @@ public class DocumentStructureDetector {
      * @return 按章节拆分的子文档列表；如果无法拆分则返回仅含 fullText 的单元素列表
      */
     public List<String> splitByChapters(String fullText) {
-        // 尝试匹配 "第N章" 模式作为主要拆分点
-        Pattern primaryPattern = Pattern.compile("第[一二三四五六七八九十百千\\d]+章");
-        Matcher matcher = primaryPattern.matcher(fullText);
-
+        // 优先按一级 Markdown 标题（# xxx）拆分
+        Pattern mdH1 = Pattern.compile("(?m)^#[^#].*");
+        Matcher m1 = mdH1.matcher(fullText);
         List<Integer> splitPoints = new ArrayList<>();
-        while (matcher.find()) {
-            splitPoints.add(matcher.start());
+        while (m1.find()) {
+            splitPoints.add(m1.start());
         }
 
-        if (splitPoints.size() < MIN_CHAPTER_COUNT) {
-            // 尝试次级模式："第N节"
+        // 如果一级标题不够，尝试二级标题
+        if (splitPoints.size() < 2) {
+            Pattern mdH2 = Pattern.compile("(?m)^##[^#].*");
+            Matcher m2 = mdH2.matcher(fullText);
+            splitPoints.clear();
+            while (m2.find()) {
+                splitPoints.add(m2.start());
+            }
+        }
+
+        // 如果 Markdown 标题不够，尝试 "第N章" 模式
+        if (splitPoints.size() < 2) {
+            Pattern primaryPattern = Pattern.compile("第[一二三四五六七八九十百千\\d]+章");
+            Matcher matcher = primaryPattern.matcher(fullText);
+            splitPoints.clear();
+            while (matcher.find()) {
+                splitPoints.add(matcher.start());
+            }
+        }
+
+        // 如果还不够，尝试 "第N节"
+        if (splitPoints.size() < 2) {
             Pattern secondaryPattern = Pattern.compile("第[一二三四五六七八九十百千\\d]+节");
-            matcher = secondaryPattern.matcher(fullText);
+            Matcher matcher = secondaryPattern.matcher(fullText);
             splitPoints.clear();
             while (matcher.find()) {
                 splitPoints.add(matcher.start());
@@ -112,26 +136,16 @@ public class DocumentStructureDetector {
     }
 
     /**
-     * 检查 Tika metadata 中是否包含 heading/章节层级信息。
-     * OOXML（.docx/.pptx）和 HTML 类文档在解析时会保留这些信息。
+     * 在 Markdown 文本中统计标题行数。
      */
-    private boolean hasHeadingMetadata(Metadata metadata) {
-        // OOXML heading 层级
-        for (String key : metadata.names()) {
-            String lower = key.toLowerCase();
-            if (lower.contains("heading") || lower.contains("outline")
-                    || lower.contains("paragraph") && lower.contains("level")) {
-                return true;
-            }
+    private int countMarkdownHeadings(String text) {
+        int count = 0;
+        Pattern headingPattern = Pattern.compile("(?m)^#{1,6}\\s+");
+        Matcher matcher = headingPattern.matcher(text);
+        while (matcher.find()) {
+            count++;
         }
-        // HTML heading
-        String[] headingKeys = {"h1", "h2", "h3", "h4", "h5", "h6"};
-        for (String hk : headingKeys) {
-            if (metadata.get(hk) != null) {
-                return true;
-            }
-        }
-        return false;
+        return count;
     }
 
     /**

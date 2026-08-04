@@ -40,7 +40,14 @@ public class ContextGenerator {
     @Value("${context-generation.max-retries:2}")
     private int maxRetries;
 
-    public ContextGenerator(LlmProperties llmProperties) {
+    /**
+     * 上下文生成专用模型，默认 deepseek-chat（非推理模型）。
+     * 不能用 deepseek-reasoner 等推理模型，因为它们输出在 reasoning_content 而非 content 字段。
+     */
+    private static final String DEFAULT_CONTEXT_MODEL = "deepseek-chat";
+
+    public ContextGenerator(LlmProperties llmProperties,
+                           @Value("${context-generation.model:deepseek-chat}") String contextModel) {
         LlmProperties.ProviderConfig deepseek = llmProperties.getProviders().get("deepseek");
         if (deepseek == null || !deepseek.isEnabled()) {
             throw new IllegalStateException(
@@ -49,7 +56,7 @@ public class ContextGenerator {
 
         String apiUrl = deepseek.getApiUrl();
         String apiKey = deepseek.getApiKey();
-        this.model = deepseek.getModel();
+        this.model = contextModel;
 
         if (apiUrl == null || apiUrl.isBlank()) {
             throw new IllegalStateException("ContextGenerator 需要 llm.providers.deepseek.api-url 配置");
@@ -159,9 +166,18 @@ public class ContextGenerator {
 
         try {
             JsonNode node = objectMapper.readTree(responseBody);
-            String content = node.path("choices").path(0).path("message").path("content").asText("").trim();
+            JsonNode message = node.path("choices").path(0).path("message");
+            String content = message.path("content").asText("").trim();
+
+            // 防御：推理模型（如 deepseek-v4-flash）输出在 reasoning_content 而非 content
             if (content.isEmpty()) {
-                logger.warn("LLM API 返回空 content, response 前200字: {}",
+                String reasoning = message.path("reasoning_content").asText("").trim();
+                if (!reasoning.isEmpty()) {
+                    logger.debug("LLM 返回 reasoning_content ({} chars), 用作上下文前缀", reasoning.length());
+                    // reasoning_content 可能很长，只取最后一段作为上下文描述
+                    return reasoning.length() > 200 ? reasoning.substring(reasoning.length() - 200).trim() : reasoning;
+                }
+                logger.warn("LLM API 返回空 content 且无 reasoning_content, response 前200字: {}",
                         responseBody.substring(0, Math.min(200, responseBody.length())));
             }
             return content;
@@ -174,16 +190,17 @@ public class ContextGenerator {
 
     /**
      * 截断过长的文档上下文以保证在 LLM 上下文窗口内。
-     * DeepSeek V3 128K tokens，保险起见文档部分控制在约 100K tokens（≈ 25 万中文字符）。
+     * DeepSeek V3 128K tokens，保险起见文档部分控制在约 25 万中文字符。
+     *
+     * 上游 resolveDocumentUnits 已确保文档 ≤ 25 万字符后才传入，此方法为兜底安全网。
      */
     private String truncateDocument(String documentContext) {
         int maxChars = 250_000;
         if (documentContext.length() <= maxChars) {
             return documentContext;
         }
-        // 取前 40 万字符的近似中间部分（覆盖 chunk 可能出现的区域）
-        // 实际上完整文档已经在上游被拆分为 ≤ 25 万字符的子文档
-        logger.warn("文档上下文过长 ({} chars)，截断至 {} chars", documentContext.length(), maxChars);
+        logger.warn("文档上下文过长 ({} chars)，截断至 {} chars，请检查上游 resolveDocumentUnits 是否漏拦截",
+                documentContext.length(), maxChars);
         return documentContext.substring(0, maxChars);
     }
 }

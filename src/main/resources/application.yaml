@@ -22,7 +22,7 @@ spring:
   profiles:
     active: ${SPRING_PROFILES_ACTIVE:dev}
   config:
-    import: "optional:file:./.env[.properties]"
+    import: optional:file:./.env[.properties]
 
   # ---------------- 文件上传限制 ----------------
   servlet:
@@ -31,7 +31,7 @@ spring:
       max-file-size: ${MAX_FILE_SIZE:10MB}
       max-request-size: ${MAX_REQUEST_SIZE:50MB}
 
-  # ---------------- WebFlux / Codec 缓冲（流式 LLM 响应需要） ----------------
+  # ---------------- WebFlux / Codec 缓冲 ----------------
   webflux:
     client:
       max-in-memory-size: ${WEBFLUX_MAX_IN_MEMORY:16MB}
@@ -53,7 +53,11 @@ spring:
     properties:
       hibernate:
         dialect: ${HIBERNATE_DIALECT:org.hibernate.dialect.MySQLDialect}
-        format_sql: false
+        jdbc:
+          batch_size: 200
+        order_inserts: true
+        order_updates: true
+        batch_versioned_data: true
     open-in-view: false
 
   # ---------------- Redis ----------------
@@ -105,24 +109,6 @@ minio:
   bucketName: ${MINIO_BUCKET:uploads}
   publicUrl: ${MINIO_PUBLIC_URL:http://localhost:9000}
 
-# ---------------- 嵌入向量 API（通义千问 DashScope 兼容接口） ----------------
-embedding:
-  api:
-    url: ${EMBEDDING_API_URL:https://dashscope.aliyuncs.com/compatible-mode/v1}
-    key: ${EMBEDDING_API_KEY:YOUR_DASHSCOPE_API_KEY}
-    model: ${EMBEDDING_MODEL:text-embedding-v3}
-    batch-size: ${EMBEDDING_BATCH_SIZE:100}
-    dimension: ${EMBEDDING_DIMENSION:1024}
-
-# ---------------- 文件解析 ----------------
-file:
-  parsing:
-    chunk-size: ${FILE_CHUNK_SIZE:1200}
-    buffer-size: ${FILE_BUFFER_SIZE:8192}
-    max-memory-threshold: ${FILE_MAX_MEMORY:0.8}
-    temp-dir: ${FILE_TEMP_DIR:${java.io.tmpdir}/archivemind}
-    max-text-length: ${FILE_MAX_TEXT_LENGTH:250000}
-
 # ---------------- JWT ----------------
 jwt:
   secret-key: ${JWT_SECRET_KEY:}
@@ -134,6 +120,33 @@ admin:
   primary-org: ${ADMIN_PRIMARY_ORG:default}
   org-tags: ${ADMIN_ORG_TAGS:default,admin}
 
+# ---------------- 文件解析 ----------------
+file:
+  parsing:
+    chunk-size: ${FILE_CHUNK_SIZE:1200}
+    buffer-size: ${FILE_BUFFER_SIZE:8192}
+    max-memory-threshold: ${FILE_MAX_MEMORY:0.8}
+    temp-dir: ${FILE_TEMP_DIR:${java.io.tmpdir}/archivemind}
+    max-text-length: ${FILE_MAX_TEXT_LENGTH:250000}
+
+# ---------------- LlamaParse 云端文档解析 ----------------
+llamaparse:
+  api-key: ${LLAMAPARSE_API_KEY:your-api-key-here}
+  api-url: ${LLAMAPARSE_API_URL:https://api.cloud.llamaindex.ai/api/v1}
+  result-type: ${LLAMAPARSE_RESULT_TYPE:markdown}
+  language: ${LLAMAPARSE_LANGUAGE:zh}
+  timeout-seconds: ${LLAMAPARSE_TIMEOUT:300}
+  poll-interval-seconds: ${LLAMAPARSE_POLL_INTERVAL:3}
+
+# ---------------- 嵌入向量 API（通义千问 DashScope 兼容接口） ----------------
+embedding:
+  api:
+    url: ${EMBEDDING_API_URL:https://dashscope.aliyuncs.com/compatible-mode/v1}
+    key: ${EMBEDDING_API_KEY:}
+    model: ${EMBEDDING_MODEL:text-embedding-v3}
+    batch-size: ${EMBEDDING_BATCH_SIZE:100}
+    dimension: ${EMBEDDING_DIMENSION:1024}
+
 # ---------------- 多 LLM Provider ----------------
 llm:
   default-provider: ${LLM_DEFAULT_PROVIDER:deepseek}
@@ -141,7 +154,7 @@ llm:
     deepseek:
       enabled: ${LLM_DEEPSEEK_ENABLED:true}
       api-url: ${LLM_DEEPSEEK_API_URL:https://api.deepseek.com/v1}
-      api-key: ${LLM_DEEPSEEK_API_KEY:YOUR_DEEPSEEK_API_KEY}
+      api-key: ${LLM_DEEPSEEK_API_KEY:}
       model: ${LLM_DEEPSEEK_MODEL:deepseek-chat}
       supports-tool-calling: true
     openai:
@@ -192,9 +205,9 @@ ai:
     ambiguous-threshold: ${AI_INTENT_AMBIGUOUS_THRESHOLD:0.4}
     ambiguous-reply: ${AI_INTENT_AMBIGUOUS_REPLY:您的问题我不太确定想查什么，能否补充一下（例如：哪个业务域/哪份文档/什么时间）？}
     keywords:
-      chitchat: ["你好","在吗","谢谢","再见","你是谁","你是AI"]
-      doc_operation: ["归档","上传文档","删除文档","移动文档","重命名"]
-      knowledge_qa: ["查询","检索","什么是","怎么","为什么","政策","规定","流程"]
+      chitchat: ["你好", "在吗", "谢谢", "再见", "你是谁", "你是AI"]
+      doc_operation: ["归档", "上传文档", "删除文档", "移动文档", "重命名"]
+      knowledge_qa: ["查询", "检索", "什么是", "怎么", "为什么", "政策", "规定", "流程"]
   clarify:
     enabled: ${AI_CLARIFY_ENABLED:true}
     base-url: ${AI_CLARIFY_BASE_URL:https://api.deepseek.com/v1}
