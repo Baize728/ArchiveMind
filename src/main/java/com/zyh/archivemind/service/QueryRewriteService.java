@@ -180,3 +180,4 @@ public class QueryRewriteService {
         return text.substring(0, maxLength) + "...";
     }
 }
+
