@@ -35,8 +35,16 @@ public class ClarifyRuleService {
      * @return 缺失槽位列表（空列表=READY）
      */
     public List<String> missingSlots(SlotBundle slots, SessionState state) {
+        return missingSlots(null, slots, state);
+    }
+
+    /**
+     * 根据当前查询计算缺失槽位。
+     * 完整的概念/事实问题不要求补充业务域或实体，避免正常问题被澄清层拦截。
+     */
+    public List<String> missingSlots(String query, SlotBundle slots, SessionState state) {
         // 1. 计算原始缺失（Q12 逻辑）
-        List<String> raw = computeRawMissing(slots);
+        List<String> raw = computeRawMissing(query, slots);
 
         // 2. 过滤已问且用户未答的（Q13）
         List<String> asked = state != null && state.lastAskedFields() != null
@@ -60,9 +68,14 @@ public class ClarifyRuleService {
      * Q12 条件必填判定。
      * domain 条件必填（阈值 3）；entity 在 docScope 也缺失时必填。
      */
-    private List<String> computeRawMissing(SlotBundle slots) {
+    private List<String> computeRawMissing(String query, SlotBundle slots) {
         List<String> missing = new ArrayList<>();
         int threshold = aiProperties.getClarify().getDomainRequiredOtherScoreThreshold();
+
+        // 已经明确提出概念/原理/定义类问题时，业务域只是可选过滤条件。
+        if (isSelfContainedKnowledgeQuestion(query, slots)) {
+            return missing;
+        }
 
         // domain 条件必填
         if (slots.domain() == null) {
@@ -81,6 +94,28 @@ public class ClarifyRuleService {
 
         // timeRange/docScope 永不强制追问
         return missing;
+    }
+
+    private boolean isSelfContainedKnowledgeQuestion(String query, SlotBundle slots) {
+        if (query == null || query.isBlank()) {
+            return false;
+        }
+
+        String normalized = query.trim();
+        boolean conceptualQuestion = normalized.matches(
+                ".*(什么是|是什么|何为|概念|原理|含义|区别|为什么).*");
+        if (!conceptualQuestion) {
+            return false;
+        }
+
+        if (slots != null && (slots.entity() != null || slots.docScope() != null)) {
+            return true;
+        }
+
+        String topic = normalized
+                .replaceFirst("^(什么是|是什么|何为|为什么)\\s*", "")
+                .replaceAll("[\\s?？。！!，,、：:]", "");
+        return topic.length() >= 2;
     }
 
     /**

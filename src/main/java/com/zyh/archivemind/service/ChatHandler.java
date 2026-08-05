@@ -168,29 +168,38 @@ public class ChatHandler {
         // ========== T1-2 1. 读取 SessionState（Q16 方案 A）==========
         SessionState state = sessionStateService.get(conversationId);
 
+        SessionState previousState = state;
+        boolean clarificationContinuation = isClarificationContinuation(state, userMessage);
+
         // ========== T1-2 2. QueryRewrite（所有意图前置，ADR-012）==========
         long rewriteStart = System.currentTimeMillis();
-        String rewrittenQuery = queryRewriteService.rewrite(userMessage, history);
+        String rewrittenQuery = clarificationContinuation
+                ? mergePendingQuery(state.pendingQuery(), userMessage)
+                : queryRewriteService.rewrite(userMessage, history);
         long rewriteLatency = System.currentTimeMillis() - rewriteStart;
         // 记录 trace（无历史时 rewriteService 内部直接返回原 query，不调 LLM，latency~0）
         traceScope.recordQueryRewrite(userMessage, rewrittenQuery, rewriteLatency);
 
         // ========== T1-2 3. 意图识别（用改写后的 query）==========
-        IntentResult intentResult = intentRouter.route(rewrittenQuery, history, state);
+        IntentResult intentResult = clarificationContinuation
+                ? new IntentResult(Intent.KNOWLEDGE_QA, 0.95, "CLARIFY_CONTINUE", "")
+                : intentRouter.route(rewrittenQuery, history, state);
         traceScope.recordIntent(rewrittenQuery, intentResult.intent().name(),
                 intentResult.confidence(), intentResult.source());
 
-        // 统一写入 lastIntent（Q21）
+        // 澄清未继续时视为新话题，清理旧槽位、澄清轮次和 pending 查询。
+        // 两个条件合并处理，避免 reset 后又把上一轮 lastIntent 写回状态。
+        boolean newTopic = (previousState.hasPendingClarification() && !clarificationContinuation)
+                || (previousState.clarifyTurn() > 0
+                && previousState.lastIntent() == Intent.KNOWLEDGE_QA
+                && intentResult.intent() != Intent.KNOWLEDGE_QA);
+        if (newTopic) {
+            state = previousState.resetForNewTopic();
+        }
+
+        // 统一写入本轮意图（Q21），必须放在新话题重置之后。
         state = state.withLastIntent(intentResult.intent());
         sessionStateService.update(conversationId, state);
-
-        // Q18：换话题重置（上一轮 KNOWLEDGE_QA 且本轮不是 → 重置 clarifyTurn + lastAskedFields）
-        if (state.clarifyTurn() > 0
-                && state.lastIntent() == Intent.KNOWLEDGE_QA
-                && intentResult.intent() != Intent.KNOWLEDGE_QA) {
-            state = state.resetClarify();
-            sessionStateService.update(conversationId, state);
-        }
 
         // ========== T1-2 4. 路由分发 ==========
         switch (intentResult.intent()) {
@@ -209,6 +218,10 @@ public class ChatHandler {
                 logger.info("[DEBUG-CLARIFY] entering KNOWLEDGE_QA case, clarify.enabled={}", aiProperties.getClarify().isEnabled());
                 // ========== T1-2 澄清流程 ==========
                 if (aiProperties.getClarify().isEnabled()) {
+                    if (!state.hasPendingClarification()) {
+                        state = state.withPendingClarification(userMessage, Intent.KNOWLEDGE_QA);
+                        sessionStateService.update(conversationId, state);
+                    }
                     ClarifyResult clarifyResult = runClarify(rewrittenQuery, state, conversationId, traceScope);
                     if (clarifyResult.action() == ClarifyResult.ClarifyAction.ASK) {
                         handleClarifyAsk(session, convId, userId, userMessage, clarifyResult,
@@ -322,7 +335,7 @@ public class ChatHandler {
             }
 
             // 4. 规则判缺失
-            List<String> missing = clarifyRuleService.missingSlots(merged, state);
+            List<String> missing = clarifyRuleService.missingSlots(query, merged, state);
             finalMissing = missing;
             logger.info("[DEBUG-CLARIFY] missing slots: {}", missing);
 
@@ -430,6 +443,33 @@ public class ChatHandler {
         // 当前用户问题
         messages.add(LlmMessage.user(userMessage));
         return messages;
+    }
+
+    /**
+     * 判断当前输入是否是在回答上一轮澄清。
+     * 明确的新问题不继承旧澄清状态，短场景补充则保留原始问题。
+     */
+    private boolean isClarificationContinuation(SessionState state, String userMessage) {
+        if (!state.hasPendingClarification()
+                || state.pendingIntent() != Intent.KNOWLEDGE_QA
+                || userMessage == null
+                || userMessage.isBlank()) {
+            return false;
+        }
+
+        String text = userMessage.trim();
+        if (text.contains("?") || text.contains("？")) {
+            return false;
+        }
+
+        return !text.matches("^(什么|为何|为什么|怎么|如何|怎样|能否|是否|请问|帮我|查询|检索).*");
+    }
+
+    private String mergePendingQuery(String pendingQuery, String clarificationAnswer) {
+        if (pendingQuery == null || pendingQuery.isBlank()) {
+            return clarificationAnswer;
+        }
+        return pendingQuery + "\n补充场景：" + clarificationAnswer;
     }
 
     /**
