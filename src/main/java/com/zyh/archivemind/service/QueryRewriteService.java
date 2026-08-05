@@ -47,6 +47,12 @@ public class QueryRewriteService {
             return currentQuery;
         }
 
+        String deterministicFollowUp = rewriteAffirmativeFollowUp(currentQuery, history);
+        if (deterministicFollowUp != null) {
+            logger.info("Query Rewriting: [{}] -> [{}]", currentQuery, deterministicFollowUp);
+            return deterministicFollowUp;
+        }
+
         try {
             int maxMessages = cfg.getMaxHistoryRounds() * 2;
             List<Map<String, String>> recentHistory = history.size() > maxMessages
@@ -83,5 +89,94 @@ public class QueryRewriteService {
             logger.error("Query Rewriting 失败，回退到原始查询: {}", e.getMessage(), e);
             return currentQuery;
         }
+    }
+
+    private String rewriteAffirmativeFollowUp(String currentQuery, List<Map<String, String>> history) {
+        if (!isAffirmativeFollowUp(currentQuery)) {
+            return null;
+        }
+
+        int offerIndex = -1;
+        for (int i = history.size() - 1; i >= 0; i--) {
+            Map<String, String> msg = history.get(i);
+            if (!"assistant".equals(msg.get("role"))) {
+                continue;
+            }
+            String content = msg.getOrDefault("content", "").trim();
+            if (looksLikeAssistantOfferedFollowUp(content)) {
+                offerIndex = i;
+                break;
+            }
+        }
+
+        if (offerIndex < 0) {
+            return null;
+        }
+
+        String lastAssistant = history.get(offerIndex).getOrDefault("content", "").trim();
+        String lastUser = null;
+        for (int i = offerIndex - 1; i >= 0; i--) {
+            Map<String, String> msg = history.get(i);
+            if ("user".equals(msg.get("role"))) {
+                String content = msg.getOrDefault("content", "").trim();
+                if (!content.isEmpty()) {
+                    lastUser = content;
+                    break;
+                }
+            }
+        }
+
+        StringBuilder rewritten = new StringBuilder("基于上一轮");
+        if (lastUser != null && !lastUser.isBlank()) {
+            rewritten.append("问题「").append(limit(lastUser, 80)).append("」");
+        } else {
+            rewritten.append("回答");
+        }
+        rewritten.append("，继续做进一步深入分析");
+
+        String topics = extractOfferedTopics(lastAssistant);
+        if (topics != null && !topics.isBlank()) {
+            rewritten.append("，重点包括").append(limit(topics, 120));
+        }
+        rewritten.append("。");
+        return rewritten.toString();
+    }
+
+    private boolean isAffirmativeFollowUp(String query) {
+        if (query == null) {
+            return false;
+        }
+        String normalized = query.trim().replaceAll("[\\s。！？!?,，、.]+", "");
+        return List.of("需要", "我需要", "要", "我要", "继续", "请继续", "可以", "好的",
+                "好", "是", "是的", "对", "对的", "进一步", "进一步分析", "详细点",
+                "展开", "展开说说", "继续分析").contains(normalized);
+    }
+
+    private boolean looksLikeAssistantOfferedFollowUp(String assistant) {
+        return assistant.contains("如果") && assistant.contains("需要")
+                && (assistant.contains("进一步") || assistant.contains("继续") || assistant.contains("深入"));
+    }
+
+    private String extractOfferedTopics(String assistant) {
+        int start = assistant.lastIndexOf("例如");
+        if (start < 0) {
+            return null;
+        }
+        start += "例如".length();
+        int end = assistant.indexOf("）", start);
+        if (end < 0) end = assistant.indexOf(")", start);
+        if (end < 0) end = assistant.indexOf("，请", start);
+        if (end < 0) end = assistant.indexOf("。", start);
+        if (end <= start) {
+            return null;
+        }
+        return assistant.substring(start, end).trim();
+    }
+
+    private String limit(String text, int maxLength) {
+        if (text == null || text.length() <= maxLength) {
+            return text;
+        }
+        return text.substring(0, maxLength) + "...";
     }
 }
