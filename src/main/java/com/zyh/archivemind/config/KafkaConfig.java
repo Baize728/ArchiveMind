@@ -1,5 +1,6 @@
 package com.zyh.archivemind.config;
 
+import com.zyh.archivemind.service.LlamaParseClient.LlamaParseException;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -14,7 +15,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.listener.DeadLetterPublishingRecoverer;
 import org.springframework.kafka.listener.DefaultErrorHandler;
-import org.springframework.util.backoff.FixedBackOff;
+import org.springframework.util.backoff.ExponentialBackOff;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -94,8 +95,16 @@ public class KafkaConfig {
                 kafkaTemplate,
                 (record, ex) -> new TopicPartition(fileProcessingDltTopic, record.partition()));
 
-        // 固定退避策略：每 3 秒重试一次，最多重试 4 次（加首次共 5 次）
-        DefaultErrorHandler errorHandler = new DefaultErrorHandler(recoverer, new FixedBackOff(3000L, 4));
+        // 指数退避：1s, 2s, 4s, 8s（4 次重试，加首次共 5 次），适合跨国大文件上传场景
+        ExponentialBackOff backOff = new ExponentialBackOff(1000L, 2.0);
+        backOff.setMaxElapsedTime(30_000L); // 最多重试 30 秒
+        DefaultErrorHandler errorHandler = new DefaultErrorHandler(recoverer, backOff);
+
+        // 不可重试的异常直接路由到 DLT，不浪费 Kafka 重试次数
+        errorHandler.addNotRetryableExceptions(
+                LlamaParseException.class,    // LlamaParse 客户端异常（由 consumer 内部已判断可重试性）
+                IllegalArgumentException.class
+        );
 
         ConcurrentKafkaListenerContainerFactory<String, Object> factory = new ConcurrentKafkaListenerContainerFactory<>();
         factory.setConsumerFactory(consumerFactory);

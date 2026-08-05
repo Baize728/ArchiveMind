@@ -1,6 +1,9 @@
 package com.zyh.archivemind.service;
 
+import com.zyh.archivemind.chunk.ChunkUnit;
+import com.zyh.archivemind.chunk.StructureAwareChunkSplitter;
 import com.zyh.archivemind.model.DocumentVector;
+import com.zyh.archivemind.parser.ParseRequest;
 import com.zyh.archivemind.repository.DocumentVectorRepository;
 import com.zyh.archivemind.service.LlamaParseClient.LlamaParseException;
 import org.slf4j.Logger;
@@ -43,6 +46,9 @@ public class ParseService {
 
     /** 自包含 chunk 跳过 LLM 上下文生成的长度阈值（≤ 200 字不调 LLM） */
     private static final int CONTEXT_MIN_CHUNK_LENGTH = 200;
+    private static final int MAX_CONTEXT_PREFIX_LENGTH = 500;
+    private static final int MAX_STRUCTURAL_CONTEXT_LENGTH = 800;
+    private static final int MAX_CONTEXTUALIZED_CONTENT_LENGTH = 60_000;
 
     @Autowired
     private DocumentVectorRepository documentVectorRepository;
@@ -51,13 +57,19 @@ public class ParseService {
     private ContextGenerator contextGenerator;
 
     @Autowired
-    private LlamaParseClient llamaParseClient;
+    private ParsedDocumentService parsedDocumentService;
 
     @Autowired
     private DocumentStructureDetector structureDetector;
 
+    @Autowired
+    private StructureAwareChunkSplitter chunkSplitter;
+
     @Value("${file.parsing.chunk-size}")
     private int chunkSize;
+
+    @Value("${file.parsing.chunk-overlap-size:120}")
+    private int chunkOverlapSize;
 
     @Value("${file.parsing.buffer-size:1024 * 1024}")
     private int bufferSize;
@@ -70,6 +82,9 @@ public class ParseService {
 
     @Value("${file.parsing.max-text-length:250000}")
     private int maxTextLength;
+
+    @Value("${llamaparse.language:ch_sim}")
+    private String parseLanguage;
 
     /**
      * 应用启动时清理残留的临时文件（处理异常中断的遗留物）。
@@ -113,6 +128,23 @@ public class ParseService {
      */
     public void parseAndSave(String fileMd5, InputStream fileStream,
             String userId, String orgTag, boolean isPublic) throws IOException {
+        parseAndSave(fileMd5, fileStream, fileMd5, userId, orgTag, isPublic);
+    }
+
+    /**
+     * 解析文件并入库（Contextual Retrieval 管道）。
+     *
+     * @param fileMd5    文件的MD5哈希值
+     * @param fileStream 文件输入流
+     * @param fileName   原始文件名，用于 ParserRouter 判断本地解析或 LlamaParse
+     * @param userId     上传用户ID
+     * @param orgTag     组织标签
+     * @param isPublic   是否公开
+     * @throws IOException     文件读写错误
+     * @throws LlamaParseException LlamaParse 解析失败
+     */
+    public void parseAndSave(String fileMd5, InputStream fileStream, String fileName,
+            String userId, String orgTag, boolean isPublic) throws IOException {
         logger.info("开始 Contextual Retrieval 管道解析，fileMd5: {}, userId: {}, orgTag: {}, isPublic: {}",
                 fileMd5, userId, orgTag, isPublic);
 
@@ -137,9 +169,18 @@ public class ParseService {
 
             checkMemoryThreshold();
 
-            // Phase C: LlamaParse 云端解析 → 结构化 Markdown（替代 Tika 提取）
-            String extractedText = llamaParseClient.parse(tempFile);
-            logger.info("LlamaParse 解析完成, fileMd5: {}, 文本长度: {} chars", fileMd5, extractedText.length());
+            // Phase C: ParserRouter + parsed_documents 缓存 → 结构化 Markdown
+            ParseRequest parseRequest = new ParseRequest(
+                    fileMd5,
+                    fileName,
+                    null,
+                    tempFile,
+                    parseLanguage,
+                    false
+            );
+            String extractedText = parsedDocumentService.getOrParse(parseRequest);
+            logger.info("文档解析完成, fileMd5: {}, fileName: {}, 文本长度: {} chars",
+                    fileMd5, fileName, extractedText.length());
 
             // Phase D: 扫描件/低质量文档检测（仅告警，不拦截）
             // LlamaParse VLM 模式下会自动 OCR 扫描件，此检测仅用于日志监控
@@ -148,31 +189,40 @@ public class ParseService {
                         extractedText.trim().length());
             }
 
-            // Phase E: 文档结构判断 + 大小判断 → 选择处理路径
-            List<String> documentUnits = resolveDocumentUnits(extractedText);
+            // Phase E: 结构感知切割 + 文档画像
+            boolean hasStructure = structureDetector.hasStructure(extractedText);
+            boolean useCchFallback = extractedText.length() > maxTextLength && !hasStructure;
+            List<ChunkUnit> chunks = chunkSplitter.split(extractedText, chunkSize, chunkOverlapSize);
+            if (chunks.isEmpty()) {
+                throw new IllegalStateException("结构感知切割未生成有效 chunk: fileMd5=" + fileMd5);
+            }
+            logger.info("结构感知 Chunk 切割完成, fileMd5: {}, chunks: {}, hasStructure: {}, overlap: {}",
+                    fileMd5, chunks.size(), hasStructure, chunkOverlapSize);
 
-            // 超大且无结构文档 → LLM 上下文用 CCH 固定前缀替代全文
-            String llmContext = extractedText;
-            if (extractedText.length() > maxTextLength
-                    && !structureDetector.hasStructure(extractedText)) {
-                llmContext = buildCchContext(extractedText);
-                logger.info("CCH 降级: LLM 上下文切换为固定前缀 ({} chars)", llmContext.length());
+            String documentBrief = contextGenerator.generateDocumentBrief(extractedText);
+            if (documentBrief == null || documentBrief.isBlank()) {
+                documentBrief = buildCchContext(extractedText);
+                logger.info("文档画像生成降级: 使用 CCH 固定画像 ({} chars)", documentBrief.length());
+            } else {
+                logger.info("文档画像生成完成: {} chars", documentBrief.length());
             }
 
-            // Phase F: 对每个文档单元执行语义切分 + 上下文生成 + 入库
-            int totalChunks = 0;
-            int chunkSeq = 0;
-            for (String docUnit : documentUnits) {
-                List<String> chunks = splitTextIntoChunksWithSemantics(docUnit, chunkSize);
-                // 有结构/未超限：用文档原文；CCH 降级：用固定前缀
-                String contextForLlm = (extractedText.length() > maxTextLength
-                        && !structureDetector.hasStructure(extractedText))
-                        ? llmContext : docUnit;
-                chunkSeq = processChunksWithContext(
-                        fileMd5, userId, orgTag, isPublic,
-                        chunks, contextForLlm, chunkSeq);
-                totalChunks += chunks.size();
+            // 超大且无结构文档 → LLM 局部上下文补充 CCH 固定前缀，避免发送大段全文。
+            String fallbackLocalContext = null;
+            if (useCchFallback) {
+                fallbackLocalContext = buildCchContext(extractedText);
+                logger.info("CCH 降级: LLM 上下文切换为固定前缀 ({} chars)", fallbackLocalContext.length());
             }
+
+            // 幂等处理：同一用户重复处理同一文件时，先清理旧 chunks，避免 Kafka 重试产生重复入库。
+            documentVectorRepository.deleteByFileMd5AndUserId(fileMd5, userId);
+            logger.info("已清理旧 DocumentVector 记录，fileMd5: {}, userId: {}", fileMd5, userId);
+
+            // Phase F: 对每个结构化 chunk 执行上下文生成 + 入库
+            int totalChunks = chunks.size();
+            processChunksWithContext(
+                    fileMd5, userId, orgTag, isPublic,
+                    chunks, documentBrief, fallbackLocalContext, 0);
 
             logger.info("Contextual Retrieval 管道完成，fileMd5: {}, 总chunk数: {}", fileMd5, totalChunks);
 
@@ -189,7 +239,7 @@ public class ParseService {
      * 兼容旧版本的解析方法。
      */
     public void parseAndSave(String fileMd5, InputStream fileStream) throws IOException {
-        parseAndSave(fileMd5, fileStream, "unknown", "DEFAULT", false);
+        parseAndSave(fileMd5, fileStream, fileMd5, "unknown", "DEFAULT", false);
     }
 
     // ===================== 文档单元拆分 =====================
@@ -265,26 +315,35 @@ public class ParseService {
      * @param orgTag          组织标签
      * @param isPublic        是否公开
      * @param chunks          文本 chunk 列表
-     * @param documentContext 完整文档文本（用作 LLM 上下文参考）
+     * @param documentBrief   文档级画像（主题、章节、关键实体）
+     * @param localContext    当前 chunk 所在章节/文档单元上下文
      * @param startingChunkId chunk 起始序号
      * @return 保存后的最终 chunk 序号
      */
     private int processChunksWithContext(String fileMd5, String userId, String orgTag,
-            boolean isPublic, List<String> chunks, String documentContext, int startingChunkId) {
+            boolean isPublic, List<ChunkUnit> chunks, String documentBrief,
+            String fallbackLocalContext, int startingChunkId) {
         int currentChunkId = startingChunkId;
         List<DocumentVector> batch = new ArrayList<>(Math.min(chunks.size(), 200));
 
-        for (String chunk : chunks) {
+        for (ChunkUnit chunkUnit : chunks) {
             currentChunkId++;
+            String chunk = chunkUnit.content();
+            String structuralContext = buildStructuralContext(chunkUnit);
+            String localContext = combineLocalContext(structuralContext, fallbackLocalContext);
 
             String contextualizedContent;
-            if (chunk.length() <= CONTEXT_MIN_CHUNK_LENGTH) {
-                // 自包含短文本（FAQ、对话对等），跳过 LLM 调用
-                contextualizedContent = chunk;
+            if (shouldSkipLlmContext(chunkUnit)) {
+                // 自包含短文本、表格、代码块优先使用确定性结构上下文，减少 LLM 成本和网络风险。
+                contextualizedContent = structuralContext.isBlank()
+                        ? chunk
+                        : buildContextualizedContent(structuralContext, chunk, currentChunkId);
             } else {
-                String contextPrefix = contextGenerator.generateContext(documentContext, chunk);
+                String contextPrefix = contextGenerator.generateContext(documentBrief, localContext, chunk);
                 if (contextPrefix != null && !contextPrefix.isBlank()) {
-                    contextualizedContent = contextPrefix + "\n" + chunk;
+                    contextualizedContent = buildContextualizedContent(contextPrefix, chunk, currentChunkId);
+                } else if (!structuralContext.isBlank()) {
+                    contextualizedContent = buildContextualizedContent(structuralContext, chunk, currentChunkId);
                 } else {
                     // LLM 调用失败降级：直接用原始文本
                     contextualizedContent = chunk;
@@ -296,6 +355,12 @@ public class ParseService {
             vector.setChunkId(currentChunkId);
             vector.setTextContent(chunk);
             vector.setContextualizedContent(contextualizedContent);
+            vector.setDocTitle(chunkUnit.docTitle());
+            vector.setHeadingPath(chunkUnit.headingPath());
+            vector.setBlockType(chunkUnit.blockType());
+            vector.setStartOffset(chunkUnit.startOffset());
+            vector.setEndOffset(chunkUnit.endOffset());
+            vector.setTokenLength(chunkUnit.tokenLength());
             vector.setUserId(userId);
             vector.setOrgTag(orgTag);
             vector.setPublic(isPublic);
@@ -315,6 +380,59 @@ public class ParseService {
 
         logger.info("Chunk 上下文生成+入库完成: {} chunks (起始序号 {})", chunks.size(), startingChunkId + 1);
         return currentChunkId;
+    }
+
+    private boolean shouldSkipLlmContext(ChunkUnit chunkUnit) {
+        String blockType = chunkUnit.blockType();
+        return chunkUnit.content().length() <= CONTEXT_MIN_CHUNK_LENGTH
+                || "table".equals(blockType)
+                || "code".equals(blockType);
+    }
+
+    private String buildStructuralContext(ChunkUnit chunkUnit) {
+        StringBuilder sb = new StringBuilder();
+        if (chunkUnit.docTitle() != null && !chunkUnit.docTitle().isBlank()) {
+            sb.append("文档标题: ").append(chunkUnit.docTitle().trim()).append("。");
+        }
+        if (chunkUnit.headingPath() != null && !chunkUnit.headingPath().isBlank()) {
+            sb.append("章节路径: ").append(chunkUnit.headingPath().trim()).append("。");
+        }
+        if (chunkUnit.blockType() != null && !chunkUnit.blockType().isBlank()) {
+            sb.append("内容类型: ").append(chunkUnit.blockType().trim()).append("。");
+        }
+
+        String context = sb.toString().trim();
+        if (context.length() > MAX_STRUCTURAL_CONTEXT_LENGTH) {
+            return context.substring(0, MAX_STRUCTURAL_CONTEXT_LENGTH).trim();
+        }
+        return context;
+    }
+
+    private String combineLocalContext(String structuralContext, String fallbackLocalContext) {
+        if (fallbackLocalContext == null || fallbackLocalContext.isBlank()) {
+            return structuralContext == null ? "" : structuralContext;
+        }
+        if (structuralContext == null || structuralContext.isBlank()) {
+            return fallbackLocalContext;
+        }
+        return structuralContext + "\n" + fallbackLocalContext;
+    }
+
+    private String buildContextualizedContent(String contextPrefix, String chunk, int chunkId) {
+        String normalizedPrefix = contextPrefix.trim();
+        if (normalizedPrefix.length() > MAX_CONTEXT_PREFIX_LENGTH) {
+            logger.warn("上下文前缀过长，执行截断: chunkId={}, prefixLength={}, maxLength={}",
+                    chunkId, normalizedPrefix.length(), MAX_CONTEXT_PREFIX_LENGTH);
+            normalizedPrefix = normalizedPrefix.substring(0, MAX_CONTEXT_PREFIX_LENGTH).trim();
+        }
+
+        String contextualizedContent = normalizedPrefix + "\n" + chunk;
+        if (contextualizedContent.length() > MAX_CONTEXTUALIZED_CONTENT_LENGTH) {
+            logger.warn("上下文增强文本过长，执行截断: chunkId={}, contentLength={}, maxLength={}",
+                    chunkId, contextualizedContent.length(), MAX_CONTEXTUALIZED_CONTENT_LENGTH);
+            return contextualizedContent.substring(0, MAX_CONTEXTUALIZED_CONTENT_LENGTH);
+        }
+        return contextualizedContent;
     }
 
     // ===================== 内存安全检查 =====================

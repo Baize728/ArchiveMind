@@ -71,8 +71,8 @@ public class DocumentService {
             
             // 1. 删除Elasticsearch中的数据
             try {
-                elasticsearchService.deleteByFileMd5(fileMd5);
-                logger.info("成功从Elasticsearch删除文档: {}", fileMd5);
+                elasticsearchService.deleteByFileMd5AndUserId(fileMd5, userId);
+                logger.info("成功从Elasticsearch删除用户文档: {}, userId: {}", fileMd5, userId);
             } catch (Exception e) {
                 logger.error("从Elasticsearch删除文档时出错: {}", fileMd5, e);
                 // 继续删除其他数据
@@ -95,16 +95,16 @@ public class DocumentService {
             
             // 3. 删除DocumentVector记录
             try {
-                documentVectorRepository.deleteByFileMd5(fileMd5);
-                logger.info("成功删除文档向量记录: {}", fileMd5);
+                documentVectorRepository.deleteByFileMd5AndUserId(fileMd5, userId);
+                logger.info("成功删除用户文档向量记录: {}, userId: {}", fileMd5, userId);
             } catch (Exception e) {
                 logger.error("删除文档向量记录时出错: {}", fileMd5, e);
                 // 继续删除其他数据
             }
             
             // 4. 删除FileUpload记录
-            fileUploadRepository.deleteByFileMd5(fileMd5);
-            logger.info("成功删除文件上传记录: {}", fileMd5);
+            fileUploadRepository.deleteByFileMd5AndUserId(fileMd5, userId);
+            logger.info("成功删除文件上传记录: {}, userId: {}", fileMd5, userId);
             
             logger.info("文档删除完成: {}", fileMd5);
         } catch (Exception e) {

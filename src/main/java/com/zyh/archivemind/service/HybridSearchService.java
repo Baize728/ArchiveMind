@@ -150,7 +150,9 @@ public class HybridSearchService {
                             doc.getFileMd5(), doc.getChunkId(), doc.getTextContent(),
                             doc.getContextualizedContent(),
                             e.getValue(),
-                            doc.getUserId(), doc.getOrgTag(), doc.isPublic()
+                            doc.getUserId(), doc.getOrgTag(), doc.isPublic(),
+                            null,
+                            doc.getDocTitle(), doc.getHeadingPath(), doc.getBlockType()
                     );
                 })
                 .toList();
@@ -166,7 +168,8 @@ public class HybridSearchService {
                 s.knn(kn -> kn.field("vector").queryVector(queryVector)
                         .k(k).numCandidates(k * 2));
                 s.query(q -> q.bool(b -> {
-                    b.should(sh -> sh.match(m -> m.field("contextualizedContent").query(query)));
+                    b.should(sh -> sh.multiMatch(m -> m.query(query)
+                            .fields("contextualizedContent^3", "headingPath^2", "docTitle^2", "textContent")));
                     b.filter(f -> f.bool(bf -> {
                         buildPermissionFilter(bf, userDbId, userEffectiveTags);
                         return bf;
@@ -190,7 +193,8 @@ public class HybridSearchService {
             SearchResponse<EsDocument> resp = esClient.search(s -> {
                 s.index("knowledge_base");
                 s.query(q -> q.bool(b -> {
-                    b.must(m -> m.match(ma -> ma.field("contextualizedContent").query(query)));
+                    b.must(m -> m.multiMatch(ma -> ma.query(query)
+                            .fields("contextualizedContent^3", "headingPath^2", "docTitle^2", "textContent")));
                     b.filter(f -> f.bool(bf -> {
                         buildPermissionFilter(bf, userDbId, userEffectiveTags);
                         return bf;
@@ -214,7 +218,7 @@ public class HybridSearchService {
             co.elastic.clients.elasticsearch._types.query_dsl.BoolQuery.Builder b,
             String userDbId, List<String> userEffectiveTags) {
         b.should(s1 -> s1.term(t -> t.field("userId").value(userDbId)));
-        b.should(s2 -> s2.term(t -> t.field("public").value(true)));
+        b.should(s2 -> s2.term(t -> t.field("isPublic").value(true)));
         if (!userEffectiveTags.isEmpty()) {
             for (String tag : userEffectiveTags) {
                 b.should(s3 -> s3.term(t -> t.field("orgTag").value(tag)));
@@ -231,7 +235,8 @@ public class HybridSearchService {
             SearchResponse<EsDocument> response = esClient.search(s -> s
                     .index("knowledge_base")
                     .query(q -> q.bool(b -> {
-                        b.must(m -> m.match(ma -> ma.field("contextualizedContent").query(query)));
+                        b.must(m -> m.multiMatch(ma -> ma.query(query)
+                                .fields("contextualizedContent^3", "headingPath^2", "docTitle^2", "textContent")));
                         b.filter(f -> f.bool(bf -> {
                             buildPermissionFilter(bf, userDbId, userEffectiveTags);
                             return bf;
@@ -246,8 +251,11 @@ public class HybridSearchService {
             List<SearchResult> results = extractDocs(response).stream()
                     .map(doc -> new SearchResult(
                             doc.getFileMd5(), doc.getChunkId(), doc.getTextContent(),
+                            doc.getContextualizedContent(),
                             (double) 0, // text-only 无分数
-                            doc.getUserId(), doc.getOrgTag(), doc.isPublic()
+                            doc.getUserId(), doc.getOrgTag(), doc.isPublic(),
+                            null,
+                            doc.getDocTitle(), doc.getHeadingPath(), doc.getBlockType()
                     ))
                     .toList();
             attachFileNames(results);
@@ -353,7 +361,7 @@ public class HybridSearchService {
                     .map(SearchResult::getFileMd5).collect(Collectors.toSet());
             List<FileUpload> uploads = fileUploadRepository.findByFileMd5In(new ArrayList<>(md5Set));
             Map<String, String> md5ToName = uploads.stream()
-                    .collect(Collectors.toMap(FileUpload::getFileMd5, FileUpload::getFileName));
+                    .collect(Collectors.toMap(FileUpload::getFileMd5, FileUpload::getFileName, (left, right) -> left));
             results.forEach(r -> r.setFileName(md5ToName.get(r.getFileMd5())));
         } catch (Exception e) {
             logger.error("补充文件名失败", e);

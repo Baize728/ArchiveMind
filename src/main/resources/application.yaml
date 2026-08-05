@@ -124,19 +124,34 @@ admin:
 file:
   parsing:
     chunk-size: ${FILE_CHUNK_SIZE:1200}
+    chunk-overlap-size: ${FILE_CHUNK_OVERLAP_SIZE:120}
     buffer-size: ${FILE_BUFFER_SIZE:8192}
     max-memory-threshold: ${FILE_MAX_MEMORY:0.8}
     temp-dir: ${FILE_TEMP_DIR:${java.io.tmpdir}/archivemind}
     max-text-length: ${FILE_MAX_TEXT_LENGTH:250000}
 
+# ---------------- 解析结果缓存 / 本地解析 ----------------
+parsing:
+  cache:
+    enabled: ${PARSING_CACHE_ENABLED:true}
+  force-reparse: ${PARSING_FORCE_REPARSE:false}
+
 # ---------------- LlamaParse 云端文档解析 ----------------
 llamaparse:
   api-key: ${LLAMAPARSE_API_KEY:your-api-key-here}
-  api-url: ${LLAMAPARSE_API_URL:https://api.cloud.llamaindex.ai/api/v1}
+  api-url: ${LLAMAPARSE_API_URL:https://api.cloud.llamaindex.ai/api/v2}
   result-type: ${LLAMAPARSE_RESULT_TYPE:markdown}
-  language: ${LLAMAPARSE_LANGUAGE:zh}
+  language: ${LLAMAPARSE_LANGUAGE:ch_sim}
+  tier: ${LLAMAPARSE_TIER:agentic}
+  version: ${LLAMAPARSE_VERSION:latest}
   timeout-seconds: ${LLAMAPARSE_TIMEOUT:300}
   poll-interval-seconds: ${LLAMAPARSE_POLL_INTERVAL:3}
+  poll-max-interval-seconds: ${LLAMAPARSE_POLL_MAX_INTERVAL:15}
+  poll-backoff-multiplier: ${LLAMAPARSE_POLL_BACKOFF_MULTIPLIER:1.5}
+  poll-jitter-factor: ${LLAMAPARSE_POLL_JITTER_FACTOR:0.2}
+  poll-max-status-errors: ${LLAMAPARSE_POLL_MAX_STATUS_ERRORS:5}
+  status-request-timeout-seconds: ${LLAMAPARSE_STATUS_REQUEST_TIMEOUT:30}
+  result-request-timeout-seconds: ${LLAMAPARSE_RESULT_REQUEST_TIMEOUT:120}
 
 # ---------------- 嵌入向量 API（通义千问 DashScope 兼容接口） ----------------
 embedding:
@@ -145,7 +160,7 @@ embedding:
     key: ${EMBEDDING_API_KEY:}
     model: ${EMBEDDING_MODEL:text-embedding-v3}
     batch-size: ${EMBEDDING_BATCH_SIZE:100}
-    dimension: ${EMBEDDING_DIMENSION:1024}
+    dimension: ${EMBEDDING_DIMENSION:2048}
 
 # ---------------- 多 LLM Provider ----------------
 llm:
@@ -179,6 +194,19 @@ llm:
     temperature: ${LLM_GEN_TEMPERATURE:0.3}
     max-tokens: ${LLM_GEN_MAX_TOKENS:2000}
     top-p: ${LLM_GEN_TOP_P:0.9}
+
+# ---------------- 上下文生成（Contextual Retrieval） ----------------
+context-generation:
+  model: ${CONTEXT_GENERATION_MODEL:deepseek-chat}
+  timeout-seconds: ${CONTEXT_GENERATION_TIMEOUT:60}
+  max-retries: ${CONTEXT_GENERATION_MAX_RETRIES:2}
+  connect-timeout-ms: ${CONTEXT_GENERATION_CONNECT_TIMEOUT_MS:30000}
+  ssl-handshake-timeout-seconds: ${CONTEXT_GENERATION_SSL_HANDSHAKE_TIMEOUT:30}
+  max-document-brief-input-chars: ${CONTEXT_GENERATION_MAX_BRIEF_INPUT_CHARS:30000}
+  max-local-context-chars: ${CONTEXT_GENERATION_MAX_LOCAL_CONTEXT_CHARS:8000}
+  document-brief-max-tokens: ${CONTEXT_GENERATION_BRIEF_MAX_TOKENS:800}
+  context-max-tokens: ${CONTEXT_GENERATION_CONTEXT_MAX_TOKENS:200}
+  retry-base-delay-ms: ${CONTEXT_GENERATION_RETRY_BASE_DELAY_MS:1000}
 
 # ---------------- AI Prompt 模板 ----------------
 # 注意：prompt 文本含特殊字符（冒号/引号），不适合放在 ${} 占位符默认值中。

@@ -17,6 +17,40 @@
         "analyzer": "ik_max_word",
         "search_analyzer": "ik_smart"
       },
+      "docTitle": {
+        "type": "text",
+        "analyzer": "ik_max_word",
+        "search_analyzer": "ik_smart",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 512
+          }
+        }
+      },
+      "headingPath": {
+        "type": "text",
+        "analyzer": "ik_max_word",
+        "search_analyzer": "ik_smart",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 1024
+          }
+        }
+      },
+      "blockType": {
+        "type": "keyword"
+      },
+      "startOffset": {
+        "type": "integer"
+      },
+      "endOffset": {
+        "type": "integer"
+      },
+      "tokenLength": {
+        "type": "integer"
+      },
       "vector": {
         "type": "dense_vector",
         "dims": 2048,
