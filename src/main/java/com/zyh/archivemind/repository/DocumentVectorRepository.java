@@ -16,6 +16,8 @@ public interface DocumentVectorRepository extends JpaRepository<DocumentVector, 
 
     List<DocumentVector> findByFileMd5AndUserIdOrderByChunkIdAsc(String fileMd5, String userId);
 
+    long countByFileMd5AndUserId(String fileMd5, String userId);
+
     /**
      * 删除指定文件MD5的所有文档向量记录
      *

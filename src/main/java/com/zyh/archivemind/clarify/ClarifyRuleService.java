@@ -103,7 +103,9 @@ public class ClarifyRuleService {
 
         String normalized = query.trim();
         boolean conceptualQuestion = normalized.matches(
-                ".*(什么是|是什么|何为|概念|原理|含义|区别|为什么).*");
+                ".*(什么是|是什么|何为|概念|原理|含义|区别|为什么).*")
+                || (normalized.matches(".*(怎么|如何|怎样).*(应用|使用|实践|落地|设计|实现).*")
+                && normalized.matches(".*(理论|原则|原理|概念|模型|架构|模式|算法|协议|机制).*"));
         if (!conceptualQuestion) {
             return false;
         }

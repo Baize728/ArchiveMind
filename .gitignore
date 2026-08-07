@@ -36,6 +36,16 @@ docs/
 .kiro/specs/
 .claude/
 
+### Python / RAGAS eval ###
+.venv/
+.venv-*/
+venv/
+env/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+eval/config/ragas.env
+
 # 未完成的内置工具
 src/main/java/com/zyh/archivemind/Tool/builtin/KnowledgeStatsTool.java
 src/main/java/com/zyh/archivemind/Tool/builtin/SubmitFeedbackTool.java

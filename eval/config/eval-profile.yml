@@ -1,0 +1,12 @@
+eval:
+  runner:
+    enabled: true
+    cases-path: eval/cases/rag_eval_cases.json
+    output-dir: eval/outputs
+    top-k: 10
+    ragas-context-top-k: 5
+    generate-answers: false
+    answer-top-k: 5
+    answer-timeout-seconds: 90
+    max-context-chars: 8000
+    exit-on-complete: true

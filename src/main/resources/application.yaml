@@ -162,6 +162,16 @@ embedding:
     batch-size: ${EMBEDDING_BATCH_SIZE:100}
     dimension: ${EMBEDDING_DIMENSION:2048}
 
+# ---------------- Reranker 重排序 ----------------
+reranker:
+  api:
+    url: ${RERANKER_URL:http://localhost:8088}
+    key: ${RERANKER_KEY:}
+  model: ${RERANKER_MODEL:BAAI/bge-reranker-base}
+  timeout-seconds: ${RERANKER_TIMEOUT_SECONDS:60}
+  max-candidates: ${RERANKER_MAX_CANDIDATES:20}
+  max-document-chars: ${RERANKER_MAX_DOCUMENT_CHARS:1600}
+
 # ---------------- 多 LLM Provider ----------------
 llm:
   default-provider: ${LLM_DEFAULT_PROVIDER:deepseek}
@@ -255,6 +265,26 @@ trace:
   flush-interval-ms: ${TRACE_FLUSH_INTERVAL:500}
   mask-sensitive: ${TRACE_MASK_SENSITIVE:true}
   max-payload-length: ${TRACE_MAX_PAYLOAD:8192}
+
+# ---------------- 离线 RAG 测评（二期） ----------------
+# 默认关闭。需要评测时添加启动参数：
+# --eval.runner.enabled=true --eval.runner.cases-path=eval/cases/rag_eval_cases.json
+eval:
+  runner:
+    enabled: ${EVAL_RUNNER_ENABLED:false}
+    cases-path: ${EVAL_CASES_PATH:eval/cases/rag_eval_cases.json}
+    output-dir: ${EVAL_OUTPUT_DIR:eval/outputs}
+    run-id: ${EVAL_RUN_ID:}
+    top-k: ${EVAL_TOP_K:10}
+    ragas-context-top-k: ${EVAL_RAGAS_CONTEXT_TOP_K:5}
+    generate-answers: ${EVAL_GENERATE_ANSWERS:false}
+    answer-top-k: ${EVAL_ANSWER_TOP_K:5}
+    answer-timeout-seconds: ${EVAL_ANSWER_TIMEOUT_SECONDS:90}
+    max-context-chars: ${EVAL_MAX_CONTEXT_CHARS:8000}
+    exit-on-complete: ${EVAL_EXIT_ON_COMPLETE:false}
+    hit-at5-threshold: ${EVAL_HIT_AT5_THRESHOLD:0.85}
+    recall-at10-threshold: ${EVAL_RECALL_AT10_THRESHOLD:0.80}
+    mrr-threshold: ${EVAL_MRR_THRESHOLD:0.65}
 
 # ---------------- 日志级别 ----------------
 logging:

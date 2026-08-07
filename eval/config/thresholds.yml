@@ -1,0 +1,8 @@
+thresholds:
+  hitAt5: 0.85
+  recallAt10: 0.80
+  mrr: 0.65
+  faithfulness: 0.85
+  responseRelevancy: 0.80
+  permissionLeakCount: 0
+  dbEsConsistency: 1.0

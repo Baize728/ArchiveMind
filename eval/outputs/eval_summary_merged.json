@@ -1,0 +1,17 @@
+{
+  "total": 30,
+  "errors": 0,
+  "withAnswer": 30,
+  "hitAt1": 28,
+  "hitAt3": 29,
+  "hitAt5": 30,
+  "hitAt5Rate": 1.0,
+  "recallAt10": 1.0,
+  "mrr": 0.9583333333333334,
+  "permissionLeak": 0,
+  "dbEsBad": 0,
+  "mustContainBad": 3,
+  "mustNotContainBad": 0,
+  "sourceRefBad": 0,
+  "refusalBad": 1
+}

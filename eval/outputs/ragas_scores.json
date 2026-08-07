@@ -1,0 +1,272 @@
+[
+  {
+    "case_id": "dist_cap_001",
+    "user_input": "什么是 CAP 理论？",
+    "faithfulness": 1.0,
+    "answer_relevancy": 0.9507561958100083,
+    "response_relevancy": 0.9507561958100083,
+    "context_precision": 0.8041666666465626,
+    "context_recall": 1.0
+  },
+  {
+    "case_id": "dist_cap_002",
+    "user_input": "为什么 CAP 三者不可兼得？",
+    "faithfulness": 1.0,
+    "answer_relevancy": 0.9948410959928321,
+    "response_relevancy": 0.9948410959928321,
+    "context_precision": 0.6999999999766667,
+    "context_recall": 1.0
+  },
+  {
+    "case_id": "dist_base_001",
+    "user_input": "BASE 理论是什么？",
+    "faithfulness": 1.0,
+    "answer_relevancy": 0.9337808528130099,
+    "response_relevancy": 0.9337808528130099,
+    "context_precision": 0.9999999999,
+    "context_recall": 1.0
+  },
+  {
+    "case_id": "dist_lock_001",
+    "user_input": "常见的分布式锁实现方案有哪些？",
+    "faithfulness": 0.875,
+    "answer_relevancy": 0.999999001571981,
+    "response_relevancy": 0.999999001571981,
+    "context_precision": 0.99999999995,
+    "context_recall": 1.0
+  },
+  {
+    "case_id": "dist_lock_002",
+    "user_input": "Redis 怎么实现分布式锁？",
+    "faithfulness": 1.0,
+    "answer_relevancy": 0.9963491450168674,
+    "response_relevancy": 0.9963491450168674,
+    "context_precision": 0.9999999999,
+    "context_recall": 1.0
+  },
+  {
+    "case_id": "dist_tx_001",
+    "user_input": "什么是分布式事务？",
+    "faithfulness": 1.0,
+    "answer_relevancy": 0.9999999999999991,
+    "response_relevancy": 0.9999999999999991,
+    "context_precision": 0.9999999999,
+    "context_recall": 1.0
+  },
+  {
+    "case_id": "dist_tx_002",
+    "user_input": "分布式事务有哪些常见实现方案？",
+    "faithfulness": 0.6,
+    "answer_relevancy": 0.9976559581118564,
+    "response_relevancy": 0.9976559581118564,
+    "context_precision": 0.8666666666377778,
+    "context_recall": 1.0
+  },
+  {
+    "case_id": "dist_tx_003",
+    "user_input": "2PC 两阶段提交中有哪些角色？",
+    "faithfulness": 0.7142857142857143,
+    "answer_relevancy": 0.9958476895638175,
+    "response_relevancy": 0.9958476895638175,
+    "context_precision": 0.9999999999,
+    "context_recall": 1.0
+  },
+  {
+    "case_id": "dist_consensus_001",
+    "user_input": "Paxos 算法是什么？",
+    "faithfulness": 1.0,
+    "answer_relevancy": 0.9999989901004661,
+    "response_relevancy": 0.9999989901004661,
+    "context_precision": 0.8874999999778125,
+    "context_recall": 1.0
+  },
+  {
+    "case_id": "dist_idempotent_001",
+    "user_input": "怎么保证接口幂等性？",
+    "faithfulness": 1.0,
+    "answer_relevancy": 0.9844305820822187,
+    "response_relevancy": 0.9844305820822187,
+    "context_precision": 0.8874999999778125,
+    "context_recall": 1.0
+  },
+  {
+    "case_id": "os_intro_001",
+    "user_input": "什么是操作系统？",
+    "faithfulness": 1.0,
+    "answer_relevancy": 0.9945678568815296,
+    "response_relevancy": 0.9945678568815296,
+    "context_precision": 0.9999999999,
+    "context_recall": 1.0
+  },
+  {
+    "case_id": "os_intro_002",
+    "user_input": "操作系统主要有哪些功能？",
+    "faithfulness": 0.875,
+    "answer_relevancy": 0.9936446729665462,
+    "response_relevancy": 0.9936446729665462,
+    "context_precision": 0.9999999999,
+    "context_recall": 1.0
+  },
+  {
+    "case_id": "os_mode_001",
+    "user_input": "用户态和内核态有什么区别？",
+    "faithfulness": 1.0,
+    "answer_relevancy": 0.9922987882869124,
+    "response_relevancy": 0.9922987882869124,
+    "context_precision": 0.7499999999625,
+    "context_recall": 1.0
+  },
+  {
+    "case_id": "os_process_001",
+    "user_input": "常见的进程调度算法有哪些？",
+    "faithfulness": 0.5555555555555556,
+    "answer_relevancy": 0.9999999999999988,
+    "response_relevancy": 0.9999999999999988,
+    "context_precision": 0.9166666666361111,
+    "context_recall": 1.0
+  },
+  {
+    "case_id": "os_ipc_001",
+    "user_input": "进程间通信有哪些方式？",
+    "faithfulness": 0.7,
+    "answer_relevancy": 0.9975798981347396,
+    "response_relevancy": 0.9975798981347396,
+    "context_precision": 0.9999999999666667,
+    "context_recall": 1.0
+  },
+  {
+    "case_id": "os_deadlock_001",
+    "user_input": "什么是死锁？死锁产生需要满足哪些条件？",
+    "faithfulness": 1.0,
+    "answer_relevancy": 0.9778484526023172,
+    "response_relevancy": 0.9778484526023172,
+    "context_precision": 0.99999999995,
+    "context_recall": 1.0
+  },
+  {
+    "case_id": "os_memory_001",
+    "user_input": "什么是虚拟内存？",
+    "faithfulness": 1.0,
+    "answer_relevancy": 0.9999989481308266,
+    "response_relevancy": 0.9999989481308266,
+    "context_precision": 0.9999999999,
+    "context_recall": 1.0
+  },
+  {
+    "case_id": "os_memory_002",
+    "user_input": "分页和分段有什么区别？",
+    "faithfulness": 1.0,
+    "answer_relevancy": 0.9922497719275395,
+    "response_relevancy": 0.9922497719275395,
+    "context_precision": 0.9999999999,
+    "context_recall": 1.0
+  },
+  {
+    "case_id": "os_io_001",
+    "user_input": "零拷贝为什么能提升 I/O 性能？",
+    "faithfulness": 1.0,
+    "answer_relevancy": 0.9965564166046753,
+    "response_relevancy": 0.9965564166046753,
+    "context_precision": 0.9999999999666667,
+    "context_recall": 1.0
+  },
+  {
+    "case_id": "os_io_002",
+    "user_input": "什么是 I/O 多路复用？select 机制有什么问题？",
+    "faithfulness": 0.9,
+    "answer_relevancy": 0.9173379101525138,
+    "response_relevancy": 0.9173379101525138,
+    "context_precision": 0.99999999995,
+    "context_recall": 1.0
+  },
+  {
+    "case_id": "micro_intro_001",
+    "user_input": "什么是微服务？",
+    "faithfulness": 0.9230769230769231,
+    "answer_relevancy": 0.9999999999999992,
+    "response_relevancy": 0.9999999999999992,
+    "context_precision": 0.99999999995,
+    "context_recall": 1.0
+  },
+  {
+    "case_id": "micro_challenge_001",
+    "user_input": "微服务会带来哪些挑战？",
+    "faithfulness": 1.0,
+    "answer_relevancy": 0.9854445916176388,
+    "response_relevancy": 0.9854445916176388,
+    "context_precision": 0.99999999995,
+    "context_recall": 1.0
+  },
+  {
+    "case_id": "micro_registry_001",
+    "user_input": "注册中心是用来干什么的？",
+    "faithfulness": 1.0,
+    "answer_relevancy": 0.9072676560468113,
+    "response_relevancy": 0.9072676560468113,
+    "context_precision": 0.99999999995,
+    "context_recall": 1.0
+  },
+  {
+    "case_id": "micro_registry_002",
+    "user_input": "Eureka、ZooKeeper、Nacos 的主要区别是什么？",
+    "faithfulness": 1.0,
+    "answer_relevancy": 0.9999999999999988,
+    "response_relevancy": 0.9999999999999988,
+    "context_precision": 0.8333333332916666,
+    "context_recall": 1.0
+  },
+  {
+    "case_id": "micro_config_001",
+    "user_input": "Nacos 配置中心的原理是什么？",
+    "faithfulness": 1.0,
+    "answer_relevancy": 0.9999999999999986,
+    "response_relevancy": 0.9999999999999986,
+    "context_precision": 0.99999999995,
+    "context_recall": 1.0
+  },
+  {
+    "case_id": "micro_config_002",
+    "user_input": "Nacos 配置中心的长轮询机制是怎么做的？",
+    "faithfulness": 1.0,
+    "answer_relevancy": 0.9959590687700107,
+    "response_relevancy": 0.9959590687700107,
+    "context_precision": 0.9999999999,
+    "context_recall": 1.0
+  },
+  {
+    "case_id": "micro_rpc_001",
+    "user_input": "HTTP 和 RPC 的区别是什么？",
+    "faithfulness": 1.0,
+    "answer_relevancy": 0.9952064098646477,
+    "response_relevancy": 0.9952064098646477,
+    "context_precision": 0.99999999995,
+    "context_recall": 1.0
+  },
+  {
+    "case_id": "micro_resilience_001",
+    "user_input": "什么是服务雪崩？一般怎么防止？",
+    "faithfulness": 1.0,
+    "answer_relevancy": 0.9471406958533536,
+    "response_relevancy": 0.9471406958533536,
+    "context_precision": 0.9999999999,
+    "context_recall": 1.0
+  },
+  {
+    "case_id": "micro_gateway_001",
+    "user_input": "Spring Cloud Gateway 的核心概念有哪些？",
+    "faithfulness": 1.0,
+    "answer_relevancy": 0.9999989706178644,
+    "response_relevancy": 0.9999989706178644,
+    "context_precision": 0.49999999995,
+    "context_recall": 1.0
+  },
+  {
+    "case_id": "micro_seata_001",
+    "user_input": "Seata 支持哪些分布式事务模式？",
+    "faithfulness": 1.0,
+    "answer_relevancy": 0.9999990326978972,
+    "response_relevancy": 0.9999990326978972,
+    "context_precision": 0.0,
+    "context_recall": 0.6
+  }
+]

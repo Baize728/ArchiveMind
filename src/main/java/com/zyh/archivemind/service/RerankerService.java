@@ -28,12 +28,21 @@ public class RerankerService {
 
     private final WebClient webClient;
     private final String model;
+    private final int timeoutSeconds;
+    private final int maxCandidates;
+    private final int maxDocumentChars;
 
     public RerankerService(
             @Value("${reranker.api.url:http://localhost:8088}") String apiUrl,
             @Value("${reranker.api.key:}") String apiKey,
-            @Value("${reranker.model:BAAI/bge-reranker-v2-m3}") String model) {
+            @Value("${reranker.model:BAAI/bge-reranker-v2-m3}") String model,
+            @Value("${reranker.timeout-seconds:60}") int timeoutSeconds,
+            @Value("${reranker.max-candidates:20}") int maxCandidates,
+            @Value("${reranker.max-document-chars:1600}") int maxDocumentChars) {
         this.model = model;
+        this.timeoutSeconds = Math.max(1, timeoutSeconds);
+        this.maxCandidates = Math.max(1, maxCandidates);
+        this.maxDocumentChars = Math.max(200, maxDocumentChars);
         WebClient.Builder builder = WebClient.builder()
                 .baseUrl(apiUrl)
                 .codecs(c -> c.defaultCodecs().maxInMemorySize(16 * 1024 * 1024));
@@ -41,6 +50,8 @@ public class RerankerService {
             builder.defaultHeader("Authorization", "Bearer " + apiKey);
         }
         this.webClient = builder.build();
+        log.info("RerankerService 初始化完成, apiUrl={}, model={}, timeout={}s, maxCandidates={}, maxDocumentChars={}",
+                apiUrl, model, this.timeoutSeconds, this.maxCandidates, this.maxDocumentChars);
     }
 
     /**
@@ -55,34 +66,38 @@ public class RerankerService {
         if (candidates == null || candidates.isEmpty()) {
             return Collections.emptyList();
         }
-        if (candidates.size() <= topK) {
+        if (topK <= 0) {
+            return Collections.emptyList();
+        }
+        if (candidates.size() == 1) {
             return candidates;
         }
 
         long start = System.currentTimeMillis();
         try {
-            List<String> documents = candidates.stream()
-                    .map(r -> r.getContextualizedContent() != null
-                            ? r.getContextualizedContent()
-                            : r.getTextContent())
+            int rerankLimit = Math.min(candidates.size(), Math.max(topK, maxCandidates));
+            List<SearchResult> rerankCandidates = candidates.subList(0, rerankLimit);
+
+            List<String> documents = rerankCandidates.stream()
+                    .map(this::toRerankDocument)
                     .toList();
 
             List<Double> scores = callReranker(query, documents);
 
             // 按 rerank 分数降序，取 topK，替换原分数
-            List<SearchResult> reranked = IntStream.range(0, candidates.size())
+            List<SearchResult> reranked = IntStream.range(0, rerankCandidates.size())
                     .boxed()
                     .sorted((a, b) -> Double.compare(scores.get(b), scores.get(a)))
                     .limit(topK)
                     .map(i -> {
-                        SearchResult r = candidates.get(i);
+                        SearchResult r = rerankCandidates.get(i);
                         r.setScore(scores.get(i));
                         return r;
                     })
                     .toList();
 
-            log.info("Reranker 完成, 候选:{} -> topK:{}, 耗时:{}ms",
-                    candidates.size(), reranked.size(), System.currentTimeMillis() - start);
+            log.info("Reranker 完成, 候选:{} -> 精排:{} -> topK:{}, 耗时:{}ms",
+                    candidates.size(), rerankCandidates.size(), reranked.size(), System.currentTimeMillis() - start);
             return reranked;
 
         } catch (Exception e) {
@@ -105,15 +120,62 @@ public class RerankerService {
                 .retrieve()
                 .bodyToMono(Map.class)
                 .retryWhen(Retry.fixedDelay(2, Duration.ofMillis(500)))
-                .block(Duration.ofSeconds(10));
+                .block(Duration.ofSeconds(timeoutSeconds));
 
         if (response == null || !response.containsKey("results")) {
             throw new RuntimeException("Reranker 响应异常: " + response);
         }
 
         List<Map<String, Object>> results = (List<Map<String, Object>>) response.get("results");
+        return parseScores(results, documents.size());
+    }
+
+    private List<Double> parseScores(List<Map<String, Object>> results, int expectedSize) {
+        if (results == null || results.isEmpty()) {
+            throw new RuntimeException("Reranker 响应 results 为空");
+        }
+
+        boolean hasIndex = results.stream().allMatch(r -> r.containsKey("index"));
+        if (hasIndex) {
+            List<Double> scores = new ArrayList<>(Collections.nCopies(expectedSize, 0.0));
+            for (Map<String, Object> result : results) {
+                int index = ((Number) result.get("index")).intValue();
+                if (index < 0 || index >= expectedSize) {
+                    throw new RuntimeException("Reranker 响应 index 越界: " + index);
+                }
+                scores.set(index, readScore(result));
+            }
+            return scores;
+        }
+
+        if (results.size() != expectedSize) {
+            throw new RuntimeException("Reranker 响应数量异常: expected=" + expectedSize + ", actual=" + results.size());
+        }
         return results.stream()
-                .map(r -> ((Number) r.get("relevance_score")).doubleValue())
+                .map(this::readScore)
                 .toList();
+    }
+
+    private double readScore(Map<String, Object> result) {
+        Object score = result.get("relevance_score");
+        if (!(score instanceof Number number)) {
+            throw new RuntimeException("Reranker 响应缺少 relevance_score: " + result);
+        }
+        return number.doubleValue();
+    }
+
+    private String toRerankDocument(SearchResult result) {
+        String text = firstNonBlank(result.getContextualizedContent(), result.getTextContent());
+        if (text.length() <= maxDocumentChars) {
+            return text;
+        }
+        return text.substring(0, maxDocumentChars);
+    }
+
+    private String firstNonBlank(String preferred, String fallback) {
+        if (preferred != null && !preferred.isBlank()) {
+            return preferred;
+        }
+        return fallback == null ? "" : fallback;
     }
 }

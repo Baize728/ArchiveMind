@@ -1,0 +1,515 @@
+[
+  {
+    "caseId": "dist_cap_001",
+    "caseType": "definition",
+    "question": "什么是 CAP 理论？",
+    "reference": "CAP 理论指分布式系统中的一致性、可用性、分区容错性三个基本需求最多只能同时满足两个，不能在网络分区场景下三者完全兼得。",
+    "goldFileMd5": "4b53c8f08c0f54b46c6f0ca62bbd8798",
+    "goldChunkIds": [2],
+    "referenceContexts": [
+      "CAP原则又称CAP定理，指在分布式系统中 Consistency、Availability、Partition tolerance 三个基本需求最多只能同时满足其中两个。"
+    ],
+    "mustContain": ["一致性", "可用性", "分区容错性"],
+    "mustNotContain": ["可以三者完全兼得"],
+    "userId": "1",
+    "orgTag": "admin",
+    "isPublic": true,
+    "expectedAnswerable": true
+  },
+  {
+    "caseId": "dist_cap_002",
+    "caseType": "reasoning",
+    "question": "为什么 CAP 三者不可兼得？",
+    "reference": "分布式系统中网络分区是必须考虑的情况，因此分区容错性通常不能放弃。在发生分区时，如果继续保证可用性，不同分区可能只能返回本地数据而牺牲一致性；如果保证强一致性，就需要等待分区恢复或同步完成，从而牺牲可用性。",
+    "goldFileMd5": "4b53c8f08c0f54b46c6f0ca62bbd8798",
+    "goldChunkIds": [3],
+    "referenceContexts": [
+      "分区是分布式系统中必然存在的，满足分区容错的基础上，强一致性和可用性难以同时满足。"
+    ],
+    "mustContain": ["分区", "一致性", "可用性"],
+    "mustNotContain": ["分区可以忽略"],
+    "userId": "1",
+    "orgTag": "admin",
+    "isPublic": true,
+    "expectedAnswerable": true
+  },
+  {
+    "caseId": "dist_base_001",
+    "caseType": "definition",
+    "question": "BASE 理论是什么？",
+    "reference": "BASE 理论包括 Basically Available、Soft state、Eventual consistency，核心思想是在无法达到强一致性时，根据业务特点保证基本可用、允许软状态，并最终达到最终一致性。",
+    "goldFileMd5": "4b53c8f08c0f54b46c6f0ca62bbd8798",
+    "goldChunkIds": [6],
+    "referenceContexts": [
+      "BASE 是基于 CAP 演化而来，核心思想是即便不能达到强一致性，也可以根据应用特点达到最终一致性。"
+    ],
+    "mustContain": ["基本可用", "软状态", "最终一致性"],
+    "mustNotContain": ["强一致性是唯一目标"],
+    "userId": "1",
+    "orgTag": "admin",
+    "isPublic": true,
+    "expectedAnswerable": true
+  },
+  {
+    "caseId": "dist_lock_001",
+    "caseType": "list",
+    "question": "常见的分布式锁实现方案有哪些？",
+    "reference": "常见的分布式锁实现方案有 MySQL 分布式锁、ZooKeeper 分布式锁和 Redis 分布式锁。",
+    "goldFileMd5": "4b53c8f08c0f54b46c6f0ca62bbd8798",
+    "goldChunkIds": [9],
+    "referenceContexts": [
+      "常见的分布式锁实现方案有三种：MySQL分布式锁、ZooKeeper分布式锁、Redis分布式锁。"
+    ],
+    "mustContain": ["MySQL", "ZooKeeper", "Redis"],
+    "mustNotContain": [],
+    "userId": "1",
+    "orgTag": "admin",
+    "isPublic": true,
+    "expectedAnswerable": true
+  },
+  {
+    "caseId": "dist_lock_002",
+    "caseType": "implementation",
+    "question": "Redis 怎么实现分布式锁？",
+    "reference": "Redis 实现分布式锁主要利用单线程执行命令的特性，常用 setNx 或带 NX、EX 参数的原子写入方式完成加锁，并设置过期时间避免机器宕机后锁无法释放。",
+    "goldFileMd5": "4b53c8f08c0f54b46c6f0ca62bbd8798",
+    "goldChunkIds": [12],
+    "referenceContexts": [
+      "Redis 实现分布式锁利用 Redis 单线程执行命令的特性，使用 setNx，如果不存在则更新，并需要加过期时间。"
+    ],
+    "mustContain": ["Redis", "过期时间", "原子"],
+    "mustNotContain": ["不需要过期时间"],
+    "userId": "1",
+    "orgTag": "admin",
+    "isPublic": true,
+    "expectedAnswerable": true
+  },
+  {
+    "caseId": "dist_tx_001",
+    "caseType": "definition",
+    "question": "什么是分布式事务？",
+    "reference": "分布式事务是相对于本地事务而言的，事务操作跨越多个服务、数据库或资源管理器时，需要在分布式环境中保证类似 ACID 的一致性语义。",
+    "goldFileMd5": "4b53c8f08c0f54b46c6f0ca62bbd8798",
+    "goldChunkIds": [13],
+    "referenceContexts": [
+      "分布式事务是相对本地事务而言的，本地事务可以利用数据库事务机制保证 ACID 特性。"
+    ],
+    "mustContain": ["本地事务", "ACID", "分布式"],
+    "mustNotContain": [],
+    "userId": "1",
+    "orgTag": "admin",
+    "isPublic": true,
+    "expectedAnswerable": true
+  },
+  {
+    "caseId": "dist_tx_002",
+    "caseType": "list",
+    "question": "分布式事务有哪些常见实现方案？",
+    "reference": "分布式事务常见实现方案包括 2PC、3PC、TCC、本地消息表、MQ 消息事务、最大努力通知和 SAGA 事务等。",
+    "goldFileMd5": "4b53c8f08c0f54b46c6f0ca62bbd8798",
+    "goldChunkIds": [14],
+    "referenceContexts": [
+      "分布式事务常见实现方案有 2PC、3PC、TCC、本地消息表、MQ消息事务、最大努力通知、SAGA事务等。"
+    ],
+    "mustContain": ["2PC", "3PC", "TCC", "本地消息表", "MQ"],
+    "mustNotContain": [],
+    "userId": "1",
+    "orgTag": "admin",
+    "isPublic": true,
+    "expectedAnswerable": true
+  },
+  {
+    "caseId": "dist_tx_003",
+    "caseType": "implementation",
+    "question": "2PC 两阶段提交中有哪些角色？",
+    "reference": "2PC 涉及 XA 协议中的三个角色：AP 表示应用系统或服务，TM 表示事务管理器，负责全局事务管理，RM 表示资源管理器，通常对应数据库等底层资源。",
+    "goldFileMd5": "4b53c8f08c0f54b46c6f0ca62bbd8798",
+    "goldChunkIds": [15],
+    "referenceContexts": [
+      "XA 协议里有 AP、TM、RM 三个角色，AP 是应用系统，TM 是事务管理器，RM 是资源管理器。"
+    ],
+    "mustContain": ["AP", "TM", "RM"],
+    "mustNotContain": [],
+    "userId": "1",
+    "orgTag": "admin",
+    "isPublic": true,
+    "expectedAnswerable": true
+  },
+  {
+    "caseId": "dist_consensus_001",
+    "caseType": "definition",
+    "question": "Paxos 算法是什么？",
+    "reference": "Paxos 是一种基于消息传递并具有高容错特性的一致性算法，被认为是解决分布式一致性问题的经典算法之一。",
+    "goldFileMd5": "4b53c8f08c0f54b46c6f0ca62bbd8798",
+    "goldChunkIds": [27],
+    "referenceContexts": [
+      "Paxos 算法是基于消息传递且具有高容错特性的一致性算法，是解决分布式一致性问题的有效算法之一。"
+    ],
+    "mustContain": ["消息传递", "容错", "一致性"],
+    "mustNotContain": [],
+    "userId": "1",
+    "orgTag": "admin",
+    "isPublic": true,
+    "expectedAnswerable": true
+  },
+  {
+    "caseId": "dist_idempotent_001",
+    "caseType": "list",
+    "question": "怎么保证接口幂等性？",
+    "reference": "保证接口幂等性的常见方案包括 insert 前先 select、加唯一索引、加悲观锁、加乐观锁、建防重表、状态机、分布式锁和 token 机制。",
+    "goldFileMd5": "4b53c8f08c0f54b46c6f0ca62bbd8798",
+    "goldChunkIds": [41],
+    "referenceContexts": [
+      "接口幂等性方案包括 insert前先select、加唯一索引、加悲观锁、加乐观锁、建防重表、状态机、分布式锁、token机制。"
+    ],
+    "mustContain": ["唯一索引", "乐观锁", "防重表", "token"],
+    "mustNotContain": [],
+    "userId": "1",
+    "orgTag": "admin",
+    "isPublic": true,
+    "expectedAnswerable": true
+  },
+  {
+    "caseId": "os_intro_001",
+    "caseType": "definition",
+    "question": "什么是操作系统？",
+    "reference": "操作系统是运行在内核态的软件，是应用程序和硬件之间的媒介，向应用程序提供硬件抽象，并负责管理处理器、内存、I/O、文件等硬件资源。",
+    "goldFileMd5": "87e4af495e243150aa239103fb4c98ad",
+    "goldChunkIds": [2],
+    "referenceContexts": [
+      "操作系统是一种运行在内核态的软件。它是应用程序和硬件之间的媒介，向应用程序提供硬件的抽象，以及管理硬件资源。"
+    ],
+    "mustContain": ["应用程序", "硬件", "资源"],
+    "mustNotContain": [],
+    "userId": "1",
+    "orgTag": "admin",
+    "isPublic": true,
+    "expectedAnswerable": true
+  },
+  {
+    "caseId": "os_intro_002",
+    "caseType": "list",
+    "question": "操作系统主要有哪些功能？",
+    "reference": "操作系统主要负责 CPU 或处理器管理、内存管理、外存或文件管理、I/O 管理，同时还需要保证自身运行的健壮性和安全性。",
+    "goldFileMd5": "87e4af495e243150aa239103fb4c98ad",
+    "goldChunkIds": [3],
+    "referenceContexts": [
+      "操作系统最主要的功能包括处理器管理、内存管理、外存管理、I/O 管理，此外还有健壮性管理和安全性管理。"
+    ],
+    "mustContain": ["CPU", "内存", "外存", "I/O"],
+    "mustNotContain": [],
+    "userId": "1",
+    "orgTag": "admin",
+    "isPublic": true,
+    "expectedAnswerable": true
+  },
+  {
+    "caseId": "os_mode_001",
+    "caseType": "comparison",
+    "question": "用户态和内核态有什么区别？",
+    "reference": "内核态运行在内核空间，权限高，可以访问和控制 CPU、内存、硬盘等硬件资源；用户态运行在用户空间，权限较小，只能访问受限的局部内存空间。",
+    "goldFileMd5": "87e4af495e243150aa239103fb4c98ad",
+    "goldChunkIds": [5],
+    "referenceContexts": [
+      "内核空间只有内核程序可以访问，用户空间专门给应用程序使用，权限比较小；内核空间的代码可以访问所有内存空间。"
+    ],
+    "mustContain": ["内核空间", "用户空间", "权限"],
+    "mustNotContain": [],
+    "userId": "1",
+    "orgTag": "admin",
+    "isPublic": true,
+    "expectedAnswerable": true
+  },
+  {
+    "caseId": "os_process_001",
+    "caseType": "list",
+    "question": "常见的进程调度算法有哪些？",
+    "reference": "常见的进程调度算法包括先来先服务、短作业优先、优先级调度、时间片轮转和最短剩余时间优先等。",
+    "goldFileMd5": "87e4af495e243150aa239103fb4c98ad",
+    "goldChunkIds": [13],
+    "referenceContexts": [
+      "常见的进程调度算法有先来先服务、短作业优先、优先级调度、时间片轮转、最短剩余时间优先。"
+    ],
+    "mustContain": ["先来先服务", "短作业优先", "优先级", "时间片轮转"],
+    "mustNotContain": [],
+    "userId": "1",
+    "orgTag": "admin",
+    "isPublic": true,
+    "expectedAnswerable": true
+  },
+  {
+    "caseId": "os_ipc_001",
+    "caseType": "list",
+    "question": "进程间通信有哪些方式？",
+    "reference": "进程间通信常见方式包括管道、消息队列、共享内存、信号量、信号和 Socket。管道又可以分为匿名管道和命名管道。",
+    "goldFileMd5": "87e4af495e243150aa239103fb4c98ad",
+    "goldChunkIds": [17],
+    "referenceContexts": [
+      "进程间通信方式包括管道、消息队列、共享内存、信号量、信号、Socket；管道可以分为匿名管道和命名管道。"
+    ],
+    "mustContain": ["管道", "消息队列", "共享内存", "Socket"],
+    "mustNotContain": [],
+    "userId": "1",
+    "orgTag": "admin",
+    "isPublic": true,
+    "expectedAnswerable": true
+  },
+  {
+    "caseId": "os_deadlock_001",
+    "caseType": "definition",
+    "question": "什么是死锁？死锁产生需要满足哪些条件？",
+    "reference": "死锁是两个或多个线程持有资源并互相等待对方释放资源，导致无限期阻塞的状态。死锁产生需要同时满足互斥、请求并持有、不可剥夺和环路等待四个条件。",
+    "goldFileMd5": "87e4af495e243150aa239103fb4c98ad",
+    "goldChunkIds": [30, 31],
+    "referenceContexts": [
+      "两个或者多个并发线程中，每个线程持有某种资源，又等待其他线程释放资源，在状态改变前都不能向前推进，称为死锁。",
+      "死锁产生需要同时满足互斥条件、请求并持有条件、不可剥夺条件、环路等待条件。"
+    ],
+    "mustContain": ["互斥", "请求并持有", "不可剥夺", "环路等待"],
+    "mustNotContain": [],
+    "userId": "1",
+    "orgTag": "admin",
+    "isPublic": true,
+    "expectedAnswerable": true
+  },
+  {
+    "caseId": "os_memory_001",
+    "caseType": "definition",
+    "question": "什么是虚拟内存？",
+    "reference": "虚拟内存是操作系统提供的一种机制，将不同进程的虚拟地址映射到实际的物理地址。每个进程拥有独立的地址空间，由操作系统负责映射到物理内存。",
+    "goldFileMd5": "87e4af495e243150aa239103fb4c98ad",
+    "goldChunkIds": [40],
+    "referenceContexts": [
+      "虚拟内存是操作系统提供的一种机制，将不同进程的虚拟地址和不同内存的物理地址映射起来。"
+    ],
+    "mustContain": ["虚拟地址", "物理地址", "映射"],
+    "mustNotContain": [],
+    "userId": "1",
+    "orgTag": "admin",
+    "isPublic": true,
+    "expectedAnswerable": true
+  },
+  {
+    "caseId": "os_memory_002",
+    "caseType": "comparison",
+    "question": "分页和分段有什么区别？",
+    "reference": "分段是按用户需要划分的信息逻辑单位，段大小不固定，对用户可见，并提供二维地址空间；分页是为了方便主存管理划分的物理单位，页大小固定，对用户透明，并提供一维地址空间。",
+    "goldFileMd5": "87e4af495e243150aa239103fb4c98ad",
+    "goldChunkIds": [47],
+    "referenceContexts": [
+      "段是信息的逻辑单位，页是信息的物理单位；段大小不固定，页大小固定；段向用户提供二维地址空间，页提供一维地址空间。"
+    ],
+    "mustContain": ["逻辑单位", "物理单位", "大小", "地址空间"],
+    "mustNotContain": [],
+    "userId": "1",
+    "orgTag": "admin",
+    "isPublic": true,
+    "expectedAnswerable": true
+  },
+  {
+    "caseId": "os_io_001",
+    "caseType": "implementation",
+    "question": "零拷贝为什么能提升 I/O 性能？",
+    "reference": "传统 I/O 需要多次用户态与内核态上下文切换以及多次数据拷贝。零拷贝通过 mmap + write 等方式减少用户态和内核态之间的数据拷贝与上下文切换，从而提升 I/O 性能。",
+    "goldFileMd5": "87e4af495e243150aa239103fb4c98ad",
+    "goldChunkIds": [54],
+    "referenceContexts": [
+      "为了提升 I/O 性能，需要减少用户态与内核态的上下文切换和内存拷贝的次数，零拷贝技术实现主要有 mmap + write。"
+    ],
+    "mustContain": ["上下文切换", "数据拷贝", "mmap"],
+    "mustNotContain": [],
+    "userId": "1",
+    "orgTag": "admin",
+    "isPublic": true,
+    "expectedAnswerable": true
+  },
+  {
+    "caseId": "os_io_002",
+    "caseType": "definition",
+    "question": "什么是 I/O 多路复用？select 机制有什么问题？",
+    "reference": "I/O 多路复用是由一个进程或线程维护多个 Socket，让多个连接复用一个进程或线程。select 的问题包括每次都要在用户态和内核态拷贝 fd_set、遍历所有 fd_set、文件描述符数量受 FD_SETSIZE 限制且重复设置监听集合。",
+    "goldFileMd5": "87e4af495e243150aa239103fb4c98ad",
+    "goldChunkIds": [61],
+    "referenceContexts": [
+      "I/O 多路复用就是一个进程/线程维护多个 Socket；select 会把 fd_set 拷贝到内核并遍历，且默认最大只能监听 1024 个文件描述符。"
+    ],
+    "mustContain": ["多个 Socket", "select", "fd_set", "1024"],
+    "mustNotContain": [],
+    "userId": "1",
+    "orgTag": "admin",
+    "isPublic": true,
+    "expectedAnswerable": true
+  },
+  {
+    "caseId": "micro_intro_001",
+    "caseType": "definition",
+    "question": "什么是微服务？",
+    "reference": "微服务是一种软件架构风格，把大型应用拆分为一组小型、自治且松耦合的服务。每个服务负责特定业务功能，通过轻量级通信机制协作，并可以独立开发、部署和扩展。",
+    "goldFileMd5": "47eb4d9a714814478bfe77fd4f79cb8e",
+    "goldChunkIds": [2],
+    "referenceContexts": [
+      "微服务是一种软件架构风格，将一个大型应用程序划分为一组小型、自治且松耦合的服务，每个微服务负责执行特定的业务功能。"
+    ],
+    "mustContain": ["小型", "自治", "松耦合", "独立部署"],
+    "mustNotContain": ["所有模块共享同一个数据库"],
+    "userId": "1",
+    "orgTag": "admin",
+    "isPublic": true,
+    "expectedAnswerable": true
+  },
+  {
+    "caseId": "micro_challenge_001",
+    "caseType": "list",
+    "question": "微服务会带来哪些挑战？",
+    "reference": "微服务会带来系统复杂性增加、服务间通信开销、数据一致性和事务管理复杂、部署运维复杂、团队沟通协作成本增加、服务治理和版本管理复杂、分布式系统复杂性等挑战。",
+    "goldFileMd5": "47eb4d9a714814478bfe77fd4f79cb8e",
+    "goldChunkIds": [4],
+    "referenceContexts": [
+      "服务拆分后可能带来系统复杂性增加、服务间通信开销、数据一致性和事务管理、部署和运维复杂性、团队沟通和协作成本、服务治理和版本管理等问题。"
+    ],
+    "mustContain": ["系统复杂性", "通信开销", "数据一致性", "部署"],
+    "mustNotContain": ["没有额外成本"],
+    "userId": "1",
+    "orgTag": "admin",
+    "isPublic": true,
+    "expectedAnswerable": true
+  },
+  {
+    "caseId": "micro_registry_001",
+    "caseType": "definition",
+    "question": "注册中心是用来干什么的？",
+    "reference": "注册中心用于管理和维护分布式系统中各个服务的地址和元数据，实现服务注册与服务发现，同时支持负载均衡、故障恢复和服务治理等能力。",
+    "goldFileMd5": "47eb4d9a714814478bfe77fd4f79cb8e",
+    "goldChunkIds": [13],
+    "referenceContexts": [
+      "注册中心主要用于实现服务发现和服务注册，并可以提供负载均衡、故障恢复、服务治理等能力。"
+    ],
+    "mustContain": ["服务注册", "服务发现", "负载均衡", "故障恢复"],
+    "mustNotContain": [],
+    "userId": "1",
+    "orgTag": "admin",
+    "isPublic": true,
+    "expectedAnswerable": true
+  },
+  {
+    "caseId": "micro_registry_002",
+    "caseType": "comparison",
+    "question": "Eureka、ZooKeeper、Nacos 的主要区别是什么？",
+    "reference": "Eureka 由 Netflix 开发，偏 AP，访问协议是 HTTP，适合基于 HTTP 的微服务架构；ZooKeeper 来自 Apache，偏 CP，使用 TCP，提供分布式协调、配置管理和分布式锁；Nacos 来自阿里巴巴，既支持 AP 也支持 CP，支持 HTTP/DNS，面向微服务和云原生应用。",
+    "goldFileMd5": "47eb4d9a714814478bfe77fd4f79cb8e",
+    "goldChunkIds": [15],
+    "referenceContexts": [
+      "Eureka 是 AP，ZooKeeper 是 CP，Nacos 既支持 AP 也支持 CP；三者在开发方、定位、访问协议、数据存储和健康检查上都有区别。"
+    ],
+    "mustContain": ["Eureka", "ZooKeeper", "Nacos", "AP", "CP"],
+    "mustNotContain": [],
+    "userId": "1",
+    "orgTag": "admin",
+    "isPublic": true,
+    "expectedAnswerable": true
+  },
+  {
+    "caseId": "micro_config_001",
+    "caseType": "implementation",
+    "question": "Nacos 配置中心的原理是什么？",
+    "reference": "Nacos 配置中心本质上是配置信息的 CRUD。它通过存储层保存配置，服务启动时由 Nacos Client 向 Nacos Server 注册配置，运行期间通过 API 获取配置，并通过监听机制感知配置变化。",
+    "goldFileMd5": "47eb4d9a714814478bfe77fd4f79cb8e",
+    "goldChunkIds": [20],
+    "referenceContexts": [
+      "配置中心就是配置信息的 CRUD；Nacos 默认使用 Derby，也可以使用 MySQL；客户端通过 API 获取配置信息并监听配置变化。"
+    ],
+    "mustContain": ["CRUD", "Nacos Client", "Nacos Server", "监听"],
+    "mustNotContain": [],
+    "userId": "1",
+    "orgTag": "admin",
+    "isPublic": true,
+    "expectedAnswerable": true
+  },
+  {
+    "caseId": "micro_config_002",
+    "caseType": "implementation",
+    "question": "Nacos 配置中心的长轮询机制是怎么做的？",
+    "reference": "Nacos 在 Pull 的基础上使用长轮询。客户端发起 Pull 请求，服务端检查配置是否变更；没有变更就 hold 住请求并加入等待队列；配置变化时立即返回变更结果，或者到达超时时间后返回。",
+    "goldFileMd5": "47eb4d9a714814478bfe77fd4f79cb8e",
+    "goldChunkIds": [21],
+    "referenceContexts": [
+      "Nacos 在 Pull 的基础上采用长轮询；没有变更时服务端会 hold 住请求，直到配置发生变化或达到超时时间。"
+    ],
+    "mustContain": ["Pull", "hold", "配置", "超时"],
+    "mustNotContain": [],
+    "userId": "1",
+    "orgTag": "admin",
+    "isPublic": true,
+    "expectedAnswerable": true
+  },
+  {
+    "caseId": "micro_rpc_001",
+    "caseType": "comparison",
+    "question": "HTTP 和 RPC 的区别是什么？",
+    "reference": "HTTP 是一种应用层协议，强调网络通信；RPC 是远程过程调用，强调服务之间像调用本地方法一样进行远程调用。一些 RPC 框架底层也可能使用 HTTP2，因此二者并不完全在同一层面。",
+    "goldFileMd5": "47eb4d9a714814478bfe77fd4f79cb8e",
+    "goldChunkIds": [23],
+    "referenceContexts": [
+      "HTTP 是一种应用层协议，主要强调网络通信；RPC 是用于分布式系统之间通信的协议，强调服务之间的远程调用。"
+    ],
+    "mustContain": ["HTTP", "RPC", "远程调用"],
+    "mustNotContain": [],
+    "userId": "1",
+    "orgTag": "admin",
+    "isPublic": true,
+    "expectedAnswerable": true
+  },
+  {
+    "caseId": "micro_resilience_001",
+    "caseType": "reasoning",
+    "question": "什么是服务雪崩？一般怎么防止？",
+    "reference": "服务雪崩是一个或多个服务故障后，上游或依赖方持续请求、重试，压力在下游堆积，导致级联式失败甚至系统崩溃。常见防护方式包括高可用部署、限流、熔断、缓存和降级。",
+    "goldFileMd5": "47eb4d9a714814478bfe77fd4f79cb8e",
+    "goldChunkIds": [32],
+    "referenceContexts": [
+      "服务故障时依赖服务不断发起请求或重试，压力在下游堆积，可能导致级联式失败；可通过高可用部署、限流和熔断、缓存和降级来防止。"
+    ],
+    "mustContain": ["级联", "限流", "熔断", "降级"],
+    "mustNotContain": [],
+    "userId": "1",
+    "orgTag": "admin",
+    "isPublic": true,
+    "expectedAnswerable": true
+  },
+  {
+    "caseId": "micro_gateway_001",
+    "caseType": "definition",
+    "question": "Spring Cloud Gateway 的核心概念有哪些？",
+    "reference": "Spring Cloud Gateway 的核心概念包括 Route、Predicate 和 Filter。Route 定义请求匹配规则和转发目标，Predicate 用来匹配请求条件，Filter 用于处理和转换请求或响应，也可以组成过滤器链。",
+    "goldFileMd5": "47eb4d9a714814478bfe77fd4f79cb8e",
+    "goldChunkIds": [43, 44],
+    "referenceContexts": [
+      "Spring Cloud Gateway 有三个关键组件：Route 路由、Predicate 断言、Filter 过滤器。",
+      "Filter 用于对请求进行处理和转换，可以修改请求、响应以及执行其他自定义逻辑。"
+    ],
+    "mustContain": ["路由", "断言", "过滤器"],
+    "mustNotContain": [],
+    "userId": "1",
+    "orgTag": "admin",
+    "isPublic": true,
+    "expectedAnswerable": true
+  },
+  {
+    "caseId": "micro_seata_001",
+    "caseType": "list",
+    "question": "Seata 支持哪些分布式事务模式？",
+    "reference": "Seata 支持 AT、TCC、SAGA、XA 等分布式事务模式。AT 是默认常用模式，TCC 基于 Try-Confirm-Cancel 补偿机制，SAGA 基于事件驱动，XA 基于两阶段提交协议。",
+    "goldFileMd5": "47eb4d9a714814478bfe77fd4f79cb8e",
+    "goldChunkIds": [50, 52, 53, 54],
+    "referenceContexts": [
+      "Seata 支持 AT 模式、TCC 模式、SAGA 模式和 XA 模式。",
+      "TCC 模式需要实现 Try、Confirm、Cancel 三个阶段；SAGA 是基于事件驱动的分布式事务模式；XA 是基于两阶段提交协议的模式。"
+    ],
+    "mustContain": ["AT", "TCC", "SAGA", "XA"],
+    "mustNotContain": [],
+    "userId": "1",
+    "orgTag": "admin",
+    "isPublic": true,
+    "expectedAnswerable": true
+  }
+]

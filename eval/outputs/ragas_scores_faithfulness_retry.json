@@ -1,0 +1,12 @@
+[
+  {
+    "case_id": "micro_registry_002",
+    "user_input": "Eureka、ZooKeeper、Nacos 的主要区别是什么？",
+    "faithfulness": 1.0
+  },
+  {
+    "case_id": "micro_config_001",
+    "user_input": "Nacos 配置中心的原理是什么？",
+    "faithfulness": 1.0
+  }
+]
