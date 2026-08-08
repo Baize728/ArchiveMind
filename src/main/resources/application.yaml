@@ -128,12 +128,16 @@ file:
     buffer-size: ${FILE_BUFFER_SIZE:8192}
     max-memory-threshold: ${FILE_MAX_MEMORY:0.8}
     temp-dir: ${FILE_TEMP_DIR:${java.io.tmpdir}/archivemind}
-    max-text-length: ${FILE_MAX_TEXT_LENGTH:250000}
+    # 小于该大小的 Markdown 会临时读入内存以复用完整结构拆分逻辑；更大的走文件扫描规划。
+    in-memory-markdown-max-bytes: ${FILE_IN_MEMORY_MARKDOWN_MAX_BYTES:5242880}
+    # 仅用于无结构文档是否跳过逐 chunk LLM，上层结构拆分不受此阈值控制。
+    cch-fallback-max-chunks: ${FILE_CCH_FALLBACK_MAX_CHUNKS:200}
 
 # ---------------- 解析结果缓存 / 本地解析 ----------------
 parsing:
   cache:
     enabled: ${PARSING_CACHE_ENABLED:true}
+    bucket-name: ${PARSING_CACHE_BUCKET:${MINIO_BUCKET:uploads}}
   force-reparse: ${PARSING_FORCE_REPARSE:false}
 
 # ---------------- LlamaParse 云端文档解析 ----------------
@@ -276,15 +280,23 @@ eval:
     output-dir: ${EVAL_OUTPUT_DIR:eval/outputs}
     run-id: ${EVAL_RUN_ID:}
     top-k: ${EVAL_TOP_K:10}
-    ragas-context-top-k: ${EVAL_RAGAS_CONTEXT_TOP_K:5}
+    ragas-context-top-k: ${EVAL_RAGAS_CONTEXT_TOP_K:6}
     generate-answers: ${EVAL_GENERATE_ANSWERS:false}
-    answer-top-k: ${EVAL_ANSWER_TOP_K:5}
+    answer-top-k: ${EVAL_ANSWER_TOP_K:6}
     answer-timeout-seconds: ${EVAL_ANSWER_TIMEOUT_SECONDS:90}
     max-context-chars: ${EVAL_MAX_CONTEXT_CHARS:8000}
     exit-on-complete: ${EVAL_EXIT_ON_COMPLETE:false}
+    case-set-version: ${EVAL_CASE_SET_VERSION:}
+    corpus-version: ${EVAL_CORPUS_VERSION:}
+    config-version: ${EVAL_CONFIG_VERSION:}
+    judge-model-version: ${EVAL_JUDGE_MODEL_VERSION:}
     hit-at5-threshold: ${EVAL_HIT_AT5_THRESHOLD:0.85}
     recall-at10-threshold: ${EVAL_RECALL_AT10_THRESHOLD:0.80}
     mrr-threshold: ${EVAL_MRR_THRESHOLD:0.65}
+    faithfulness-threshold: ${EVAL_FAITHFULNESS_THRESHOLD:0.90}
+    answer-relevancy-threshold: ${EVAL_ANSWER_RELEVANCY_THRESHOLD:0.95}
+    context-precision-threshold: ${EVAL_CONTEXT_PRECISION_THRESHOLD:0.85}
+    context-recall-threshold: ${EVAL_CONTEXT_RECALL_THRESHOLD:0.90}
 
 # ---------------- 日志级别 ----------------
 logging:

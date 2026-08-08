@@ -1,4 +1,6 @@
 param(
+    [string]$EvalArgs = "--eval.runner.enabled=true --eval.runner.cases-path=eval/cases/rag_eval_cases.json --eval.runner.output-dir=eval/outputs --eval.runner.generate-answers=true --eval.runner.exit-on-complete=true",
+    [string]$JavaProfile = "",
     [string]$InputPath = "eval/outputs/ragas_input.json",
     [string]$OutputPath = "eval/outputs/ragas_scores.json",
     [string]$SummaryPath = "eval/outputs/ragas_summary.json",
@@ -25,13 +27,24 @@ $ErrorActionPreference = "Stop"
 $ProjectRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
 Set-Location $ProjectRoot
 
-$Python = Join-Path $ProjectRoot ".venv-ragas\Scripts\python.exe"
-if (-not (Test-Path -LiteralPath $Python)) {
-    throw "RAGAS virtualenv not found: $Python. Create it with python -m venv .venv-ragas and install eval/requirements-ragas.txt."
+Write-Host "Step 1/3: Run Java EvalRunner..."
+$MvnArgs = @(
+    "-Dmaven.test.skip=true",
+    "spring-boot:run"
+)
+if (-not [string]::IsNullOrWhiteSpace($JavaProfile)) {
+    $MvnArgs += "-Dspring-boot.run.profiles=$JavaProfile"
+}
+$MvnArgs += "-Dspring-boot.run.arguments=$EvalArgs"
+& .\mvnw.cmd @MvnArgs
+if ($LASTEXITCODE -ne 0) {
+    exit $LASTEXITCODE
 }
 
-if (-not (Test-Path -LiteralPath $InputPath)) {
-    throw "RAGAS input not found: $InputPath. Run EvalRunner first."
+Write-Host "Step 2/3: Run RAGAS..."
+$Python = Join-Path $ProjectRoot ".venv-ragas\Scripts\python.exe"
+if (-not (Test-Path -LiteralPath $Python)) {
+    throw "RAGAS virtualenv not found: $Python"
 }
 
 $ArgsList = @(
@@ -40,7 +53,12 @@ $ArgsList = @(
     "--input", $InputPath,
     "--output", $OutputPath,
     "--summary", $SummaryPath,
-    "--concurrency", "$Concurrency",
+    "--concurrency", "$Concurrency"
+)
+if (-not [string]::IsNullOrWhiteSpace($Metrics)) {
+    $ArgsList += @("--metrics", $Metrics)
+}
+$ArgsList += @(
     "--max-contexts", "$MaxContexts",
     "--max-context-chars", "$MaxContextChars",
     "--max-context-chars-per-item", "$MaxContextCharsPerItem",
@@ -50,25 +68,18 @@ $ArgsList = @(
     "--metric-timeout-seconds", "$MetricTimeoutSeconds",
     "--retry-backoff-seconds", "$RetryBackoffSeconds"
 )
-
-if (-not [string]::IsNullOrWhiteSpace($Metrics)) {
-    $ArgsList += @("--metrics", $Metrics)
-}
-
 & $Python @ArgsList
-
 if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
 }
 
-if (Test-Path -LiteralPath $EvalResultPath) {
-    & $Python "eval\scripts\merge_eval_reports.py" `
-        "--eval-result" $EvalResultPath `
-        "--ragas-scores" $OutputPath `
-        "--eval-profile" $EvalProfilePath `
-        "--summary-output" $MergedSummaryPath `
-        "--badcase-output" $BadcasePath `
-        "--manifest-output" $ManifestPath
-}
+Write-Host "Step 3/3: Merge reports..."
+& $Python "eval\scripts\merge_eval_reports.py" `
+    "--eval-result" $EvalResultPath `
+    "--ragas-scores" $OutputPath `
+    "--eval-profile" $EvalProfilePath `
+    "--summary-output" $MergedSummaryPath `
+    "--badcase-output" $BadcasePath `
+    "--manifest-output" $ManifestPath
 
 exit $LASTEXITCODE

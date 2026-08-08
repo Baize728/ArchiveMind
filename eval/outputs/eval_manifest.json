@@ -1,0 +1,28 @@
+{
+  "runId": "eval-20260807-152728-5c5ee4cd",
+  "caseSetVersion": 20260807,
+  "corpusVersion": 20260807,
+  "configVersion": 20260807,
+  "judgeModelVersion": "gpt-5.4-mini",
+  "outputDir": "eval/outputs",
+  "files": {
+    "evalResult": "eval/outputs/eval_result.json",
+    "ragasScores": "eval/outputs/ragas_scores.json",
+    "summary": "eval/outputs/eval_summary_merged.json",
+    "badcaseAnalysis": "eval/outputs/badcase_analysis.md",
+    "evalProfile": "eval/config/eval-profile.yml",
+    "cases": "eval/cases/rag_eval_cases.json",
+    "ragasEnv": "eval/config/ragas.env",
+    "mergeScript": "eval/scripts/merge_eval_reports.py",
+    "ragasScript": "eval/scripts/run_ragas_eval.py"
+  },
+  "hashes": {
+    "evalResultSha256": "191aecb4bd084e74f4396ac82b33501b21295613854a7b734b52bcd8cacbc9e7",
+    "ragasScoresSha256": "53eea36a9443e69261ecc963009fb546d41291a151da482a66917ce758b2bc48",
+    "evalProfileSha256": "ebd075530bbfaab426316f99ad388fbc312caae2e17e129ef2cc3e3d2f38b17f",
+    "casesSha256": "7175c9c5971482a5ecca9adda80f8e54489fcc3020a2d84d302823f8dd9fa446",
+    "ragasEnvSha256": "d34acaf417c5b5b7da79e41a00fb1c8402042efc8f554962a1c0e59c55e70684",
+    "mergeScriptSha256": "fb08a311d6306b416922ec4bc61ab165c8586ff8383fd71e8e9faa940c3f81c1",
+    "ragasScriptSha256": "6c5b5daf382b478fda745e1c59e82f5be56c4742ac386b273025b03bf3161401"
+  }
+}

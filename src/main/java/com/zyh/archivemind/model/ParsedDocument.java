@@ -51,12 +51,17 @@ public class ParsedDocument {
     @Column(name = "file_extension", length = 32)
     private String fileExtension;
 
-    @Lob
-    @Column(name = "markdown_content", columnDefinition = "LONGTEXT")
-    private String markdownContent;
-
     @Column(name = "markdown_length", nullable = false)
     private int markdownLength;
+
+    @Column(name = "markdown_object_key", length = 1024)
+    private String markdownObjectKey;
+
+    @Column(name = "markdown_bytes", nullable = false)
+    private long markdownBytes;
+
+    @Column(name = "storage_type", length = 32)
+    private String storageType;
 
     @Column(name = "title", length = 512)
     private String title;

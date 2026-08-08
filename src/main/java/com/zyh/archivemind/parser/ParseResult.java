@@ -1,7 +1,11 @@
 package com.zyh.archivemind.parser;
 
+import java.nio.file.Path;
+
 public record ParseResult(
-        String markdown,
+        Path markdownPath,
+        long markdownBytes,
+        String contentHash,
         String title,
         String language,
         String parserType,

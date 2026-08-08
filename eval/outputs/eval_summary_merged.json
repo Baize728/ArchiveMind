@@ -1,4 +1,5 @@
 {
+  "runId": "eval-20260807-152728-5c5ee4cd",
   "total": 30,
   "errors": 0,
   "withAnswer": 30,
@@ -10,8 +11,54 @@
   "mrr": 0.9583333333333334,
   "permissionLeak": 0,
   "dbEsBad": 0,
-  "mustContainBad": 3,
+  "mustContainBad": 1,
   "mustNotContainBad": 0,
   "sourceRefBad": 0,
-  "refusalBad": 1
+  "refusalBad": 0,
+  "ragasAvailable": true,
+  "ragasRows": 30,
+  "ragasFailedRows": 0,
+  "ragasMissingRows": 0,
+  "ragasPartialRows": 0,
+  "ragasFullRows": 30,
+  "ragas": {
+    "faithfulness": {
+      "avg": 0.7782271375836628,
+      "min": 0.2,
+      "count": 30
+    },
+    "answer_relevancy": {
+      "avg": 0.9338873293480234,
+      "min": 0.79958201633811,
+      "count": 30
+    },
+    "context_precision": {
+      "avg": 0.9268518518013271,
+      "min": 0.5833333333041666,
+      "count": 30
+    },
+    "context_recall": {
+      "avg": 0.95,
+      "min": 0.0,
+      "count": 30
+    }
+  },
+  "thresholds": {
+    "hit_at5": 0.85,
+    "recall_at10": 0.8,
+    "mrr": 0.65,
+    "faithfulness": 0.9,
+    "answer_relevancy": 0.95,
+    "context_precision": 0.85,
+    "context_recall": 0.9
+  },
+  "gate": {
+    "hitAt5Pass": true,
+    "recallAt10Pass": true,
+    "mrrPass": true,
+    "permissionLeakPass": true,
+    "dbEsPass": true,
+    "mustContainPass": false,
+    "refusalPass": true
+  }
 }

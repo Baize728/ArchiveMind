@@ -6,6 +6,10 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+
 @Component
 @Order(1000)
 public class LlamaParseDocumentParser extends AbstractLocalTextParser {
@@ -36,9 +40,9 @@ public class LlamaParseDocumentParser extends AbstractLocalTextParser {
 
     @Override
     public ParseResult parse(ParseRequest request) {
-        String markdown = llamaParseClient.parse(request.localFile());
-        String title = extractTitle(markdown, request.normalizedFileName());
-        return result(request, markdown, title);
+        Path markdownPath = llamaParseClient.parseToFile(request.localFile(), markdownOutputDir(request));
+        String title = extractTitle(readTitleSample(markdownPath), request.normalizedFileName());
+        return resultFromFile(request, markdownPath, title);
     }
 
     @Override
@@ -54,5 +58,26 @@ public class LlamaParseDocumentParser extends AbstractLocalTextParser {
     @Override
     public String parserConfigHash(ParseRequest request) {
         return DigestUtils.sha256Hex(parserType() + ":" + parserVersion());
+    }
+
+    private Path markdownOutputDir(ParseRequest request) {
+        Path localFile = request.localFile();
+        if (localFile != null && localFile.getParent() != null) {
+            return localFile.getParent();
+        }
+        return Path.of(System.getProperty("java.io.tmpdir"));
+    }
+
+    private String readTitleSample(Path markdownPath) {
+        StringBuilder sample = new StringBuilder(4096);
+        try (var reader = Files.newBufferedReader(markdownPath, StandardCharsets.UTF_8)) {
+            String line;
+            while ((line = reader.readLine()) != null && sample.length() < 4096) {
+                sample.append(line).append('\n');
+            }
+        } catch (Exception e) {
+            return "";
+        }
+        return sample.toString();
     }
 }

@@ -23,11 +23,11 @@ public class EvalProperties {
 
     private int topK = 10;
 
-    private int ragasContextTopK = 5;
+    private int ragasContextTopK = 6;
 
     private boolean generateAnswers = false;
 
-    private int answerTopK = 5;
+    private int answerTopK = 6;
 
     private int answerTimeoutSeconds = 90;
 
@@ -35,9 +35,25 @@ public class EvalProperties {
 
     private boolean exitOnComplete = false;
 
+    private String caseSetVersion = "";
+
+    private String corpusVersion = "";
+
+    private String configVersion = "";
+
+    private String judgeModelVersion = "";
+
     private double hitAt5Threshold = 0.85;
 
     private double recallAt10Threshold = 0.80;
 
     private double mrrThreshold = 0.65;
+
+    private double faithfulnessThreshold = 0.90;
+
+    private double answerRelevancyThreshold = 0.95;
+
+    private double contextPrecisionThreshold = 0.85;
+
+    private double contextRecallThreshold = 0.90;
 }

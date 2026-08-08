@@ -5,6 +5,7 @@ import com.zyh.archivemind.chunk.StructureAwareChunkSplitter;
 import com.zyh.archivemind.model.DocumentVector;
 import com.zyh.archivemind.parser.ParseRequest;
 import com.zyh.archivemind.repository.DocumentVectorRepository;
+import com.zyh.archivemind.service.DocumentStructureDetector.StructuredDocumentUnit;
 import com.zyh.archivemind.service.LlamaParseClient.LlamaParseException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -13,6 +14,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.io.*;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -49,6 +51,12 @@ public class ParseService {
     private static final int MAX_CONTEXT_PREFIX_LENGTH = 500;
     private static final int MAX_STRUCTURAL_CONTEXT_LENGTH = 800;
     private static final int MAX_CONTEXTUALIZED_CONTENT_LENGTH = 60_000;
+    private static final int STRUCTURE_SIGNAL_MIN_COUNT = 3;
+    private static final Pattern MARKDOWN_HEADING_LINE =
+            Pattern.compile("^(#{1,6})\\s+(.+?)\\s*$");
+    private static final Pattern COMPAT_HEADING_LINE =
+            Pattern.compile("^(\\d+\\.(?!\\d)|\\d+\\.\\d+(?!\\.\\d)|[一二三四五六七八九十]+、|Chapter\\s+\\d+|Section\\s+\\d+).*$",
+                    Pattern.CASE_INSENSITIVE);
 
     @Autowired
     private DocumentVectorRepository documentVectorRepository;
@@ -80,11 +88,17 @@ public class ParseService {
     @Value("${file.parsing.temp-dir:${java.io.tmpdir}/archivemind}")
     private String tempDir;
 
-    @Value("${file.parsing.max-text-length:250000}")
-    private int maxTextLength;
+    @Value("${file.parsing.cch-fallback-max-chunks:200}")
+    private int cchFallbackMaxChunks;
+
+    @Value("${context-generation.max-document-brief-input-chars:30000}")
+    private int maxStructuredUnitLength;
 
     @Value("${llamaparse.language:ch_sim}")
     private String parseLanguage;
+
+    @Value("${file.parsing.in-memory-markdown-max-bytes:5242880}")
+    private long inMemoryMarkdownMaxBytes;
 
     /**
      * 应用启动时清理残留的临时文件（处理异常中断的遗留物）。
@@ -151,6 +165,7 @@ public class ParseService {
         checkMemoryThreshold();
 
         Path tempFile = null;
+        Path markdownFile = null;
 
         try {
             // Phase A: 确保 temp dir 存在
@@ -169,7 +184,7 @@ public class ParseService {
 
             checkMemoryThreshold();
 
-            // Phase C: ParserRouter + parsed_documents 缓存 → 结构化 Markdown
+            // Phase C: ParserRouter + parsed_documents 元数据缓存 → 本地 Markdown 文件引用
             ParseRequest parseRequest = new ParseRequest(
                     fileMd5,
                     fileName,
@@ -178,59 +193,43 @@ public class ParseService {
                     parseLanguage,
                     false
             );
-            String extractedText = parsedDocumentService.getOrParse(parseRequest);
-            logger.info("文档解析完成, fileMd5: {}, fileName: {}, 文本长度: {} chars",
-                    fileMd5, fileName, extractedText.length());
+            ParsedMarkdownRef markdownRef = parsedDocumentService.getOrParseRef(parseRequest);
+            markdownFile = markdownRef.localPath();
+            logger.info("文档解析完成, fileMd5: {}, fileName: {}, markdownBytes: {}, fromCache: {}",
+                    fileMd5, fileName, markdownRef.markdownBytes(), markdownRef.fromCache());
 
             // Phase D: 扫描件/低质量文档检测（仅告警，不拦截）
             // LlamaParse VLM 模式下会自动 OCR 扫描件，此检测仅用于日志监控
-            if (extractedText.trim().length() < 50) {
-                logger.warn("LlamaParse 提取文本极短 ({} chars)，文档可能为纯图片/空白页/非文字内容",
-                        extractedText.trim().length());
+            String markdownSample = readMarkdownSample(markdownFile, 512);
+            if (markdownSample.trim().length() < 50) {
+                logger.warn("LlamaParse 提取文本极短 ({} sample chars)，文档可能为纯图片/空白页/非文字内容",
+                        markdownSample.trim().length());
             }
 
-            // Phase E: 结构感知切割 + 文档画像
-            boolean hasStructure = structureDetector.hasStructure(extractedText);
-            boolean useCchFallback = extractedText.length() > maxTextLength && !hasStructure;
-            List<ChunkUnit> chunks = chunkSplitter.split(extractedText, chunkSize, chunkOverlapSize);
-            if (chunks.isEmpty()) {
-                throw new IllegalStateException("结构感知切割未生成有效 chunk: fileMd5=" + fileMd5);
-            }
-            logger.info("结构感知 Chunk 切割完成, fileMd5: {}, chunks: {}, hasStructure: {}, overlap: {}",
-                    fileMd5, chunks.size(), hasStructure, chunkOverlapSize);
-
-            String documentBrief = contextGenerator.generateDocumentBrief(extractedText);
-            if (documentBrief == null || documentBrief.isBlank()) {
-                documentBrief = buildCchContext(extractedText);
-                logger.info("文档画像生成降级: 使用 CCH 固定画像 ({} chars)", documentBrief.length());
-            } else {
-                logger.info("文档画像生成完成: {} chars", documentBrief.length());
-            }
-
-            // 超大且无结构文档 → LLM 局部上下文补充 CCH 固定前缀，避免发送大段全文。
-            String fallbackLocalContext = null;
-            if (useCchFallback) {
-                fallbackLocalContext = buildCchContext(extractedText);
-                logger.info("CCH 降级: LLM 上下文切换为固定前缀 ({} chars)", fallbackLocalContext.length());
-            }
+            // Phase E: 结构优先的文档单元规划。大小分叉只发生在这里，后续 chunk 逻辑完全复用。
+            DocumentPlan documentPlan = planDocumentUnits(markdownRef);
+            boolean hasStructure = documentPlan.hasStructure();
+            logger.info("文档单元规划完成, fileMd5: {}, mode: {}, hasStructure: {}, forceCchFallback: {}",
+                    fileMd5, documentPlan.streaming() ? "streaming" : "in-memory",
+                    hasStructure, documentPlan.forceCchFallback());
 
             // 幂等处理：同一用户重复处理同一文件时，先清理旧 chunks，避免 Kafka 重试产生重复入库。
             documentVectorRepository.deleteByFileMd5AndUserId(fileMd5, userId);
             logger.info("已清理旧 DocumentVector 记录，fileMd5: {}, userId: {}", fileMd5, userId);
 
-            // Phase F: 对每个结构化 chunk 执行上下文生成 + 入库
-            int totalChunks = chunks.size();
-            processChunksWithContext(
-                    fileMd5, userId, orgTag, isPublic,
-                    chunks, documentBrief, fallbackLocalContext, 0);
+            // Phase F: 每个文档单元独立切分、独立画像，再连续编号入库。大文档边扫描边处理，不累计全文单元。
+            ProcessingState processingState = new ProcessingState();
+            processDocumentUnits(documentPlan, fileMd5, userId, orgTag, isPublic, processingState);
 
-            logger.info("Contextual Retrieval 管道完成，fileMd5: {}, 总chunk数: {}", fileMd5, totalChunks);
+            logger.info("Contextual Retrieval 管道完成，fileMd5: {}, 文档单元数: {}, 总chunk数: {}",
+                    fileMd5, processingState.unitCount, processingState.totalChunks);
 
         } catch (LlamaParseException e) {
             logger.error("LlamaParse 解析失败，fileMd5: {}", fileMd5, e);
             throw new RuntimeException("文档解析失败（LlamaParse）", e);
         } finally {
             // Phase G: 清理临时文件
+            deleteTempFile(markdownFile);
             deleteTempFile(tempFile);
         }
     }
@@ -244,30 +243,389 @@ public class ParseService {
 
     // ===================== 文档单元拆分 =====================
 
+    private DocumentPlan planDocumentUnits(ParsedMarkdownRef markdownRef) throws IOException {
+        if (markdownRef.markdownBytes() <= inMemoryMarkdownMaxBytes) {
+            String fullText = Files.readString(markdownRef.localPath(), StandardCharsets.UTF_8);
+            boolean hasStructure = structureDetector.hasStructure(fullText);
+            return new DocumentPlan(
+                    markdownRef.localPath(),
+                    resolveDocumentUnits(fullText, hasStructure),
+                    hasStructure,
+                    hasStructure ? "" : buildCchContext(fullText),
+                    false,
+                    false);
+        }
+
+        boolean hasStructure = hasStructure(markdownRef.localPath());
+        if (hasStructure) {
+            return new DocumentPlan(
+                    markdownRef.localPath(),
+                    null,
+                    true,
+                    "",
+                    false,
+                    true);
+        }
+
+        return new DocumentPlan(
+                markdownRef.localPath(),
+                null,
+                false,
+                buildCchContext(readMarkdownSample(markdownRef.localPath(), maxStructuredUnitLength)),
+                true,
+                true);
+    }
+
+    private void processDocumentUnits(DocumentPlan documentPlan, String fileMd5, String userId,
+                                      String orgTag, boolean isPublic,
+                                      ProcessingState processingState) throws IOException {
+        if (!documentPlan.streaming()) {
+            for (DocumentUnit documentUnit : documentPlan.units()) {
+                processDocumentUnit(fileMd5, userId, orgTag, isPublic,
+                        documentPlan, processingState, documentUnit);
+            }
+            return;
+        }
+
+        if (documentPlan.hasStructure()) {
+            streamStructuredDocumentUnits(documentPlan.markdownPath(), documentUnit ->
+                    processDocumentUnit(fileMd5, userId, orgTag, isPublic,
+                            documentPlan, processingState, documentUnit));
+        } else {
+            streamUnstructuredDocumentUnits(documentPlan.markdownPath(), documentUnit ->
+                    processDocumentUnit(fileMd5, userId, orgTag, isPublic,
+                            documentPlan, processingState, documentUnit));
+        }
+    }
+
+    private void processDocumentUnit(String fileMd5, String userId, String orgTag, boolean isPublic,
+                                     DocumentPlan documentPlan, ProcessingState processingState,
+                                     DocumentUnit documentUnit) {
+        processingState.unitCount++;
+        int unitIndex = processingState.unitCount;
+        int totalUnits = documentPlan.units() == null ? -1 : documentPlan.units().size();
+        String unitLabel = totalUnits > 0 ? unitIndex + "/" + totalUnits : String.valueOf(unitIndex);
+
+        List<ChunkUnit> chunks = chunkSplitter.split(documentUnit.text(), chunkSize, chunkOverlapSize);
+        if (chunks.isEmpty()) {
+            throw new IllegalStateException("结构感知切割未生成有效 chunk: fileMd5=" + fileMd5
+                    + ", unitIndex=" + unitIndex);
+        }
+        int offsetDelta = documentUnit.sourceStartOffset() - documentUnit.syntheticPrefixLength();
+        chunks = shiftChunkOffsets(chunks, offsetDelta);
+        processingState.totalChunks += chunks.size();
+        logger.info("文档单元 Chunk 切割完成, fileMd5: {}, unit: {}, chunks: {}, offset: {}, overlap: {}",
+                fileMd5, unitLabel, chunks.size(), documentUnit.sourceStartOffset(), chunkOverlapSize);
+
+        String fallbackLocalContext = null;
+        if (!documentPlan.hasStructure()
+                && (documentPlan.forceCchFallback() || chunks.size() > cchFallbackMaxChunks)) {
+            fallbackLocalContext = documentPlan.cchContext();
+            logger.info("CCH 降级: 无结构文档 chunks={} 超过阈值={}, 逐 chunk 上下文切换为固定前缀 ({} chars)",
+                    chunks.size(), cchFallbackMaxChunks, fallbackLocalContext.length());
+        }
+
+        String documentBrief = contextGenerator.generateDocumentBrief(documentUnit.text());
+        if (documentBrief == null || documentBrief.isBlank()) {
+            documentBrief = buildCchContext(documentUnit.text());
+            logger.info("文档单元画像生成降级: unit={}, 使用 CCH 固定画像 ({} chars)",
+                    unitLabel, documentBrief.length());
+        } else {
+            logger.info("文档单元画像生成完成: unit={}, {} chars", unitLabel, documentBrief.length());
+        }
+
+        processingState.currentChunkId = processChunksWithContext(
+                fileMd5, userId, orgTag, isPublic,
+                chunks, documentBrief, fallbackLocalContext, processingState.currentChunkId);
+    }
+
+    private boolean hasStructure(Path markdownPath) throws IOException {
+        int markdownHeadingCount = 0;
+        int compatibleHeadingCount = 0;
+        try (BufferedReader reader = Files.newBufferedReader(markdownPath, StandardCharsets.UTF_8)) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                if (MARKDOWN_HEADING_LINE.matcher(line).matches()) {
+                    markdownHeadingCount++;
+                } else if (COMPAT_HEADING_LINE.matcher(line).matches()) {
+                    compatibleHeadingCount++;
+                }
+                if (markdownHeadingCount >= STRUCTURE_SIGNAL_MIN_COUNT
+                        || compatibleHeadingCount >= STRUCTURE_SIGNAL_MIN_COUNT) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private List<DocumentUnit> resolveStructuredDocumentUnits(Path markdownPath) throws IOException {
+        List<DocumentUnit> units = new ArrayList<>();
+        List<HeadingContext> headings = new ArrayList<>();
+        StringBuilder current = new StringBuilder();
+        int currentStartOffset = 0;
+        int syntheticPrefixLength = 0;
+        int charOffset = 0;
+
+        try (BufferedReader reader = Files.newBufferedReader(markdownPath, StandardCharsets.UTF_8)) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                HeadingContext heading = parseHeading(line);
+                if (heading != null) {
+                    addDocumentUnitIfUseful(units, current, currentStartOffset, syntheticPrefixLength);
+
+                    headings.removeIf(existing -> existing.level() >= heading.level());
+                    String prefix = buildHeadingPrefix(headings);
+                    current = new StringBuilder(prefix);
+                    syntheticPrefixLength = prefix.length();
+                    currentStartOffset = charOffset;
+                    current.append(line).append('\n');
+                    headings.add(heading);
+                } else {
+                    if (current.isEmpty()) {
+                        currentStartOffset = charOffset;
+                        syntheticPrefixLength = 0;
+                    }
+                    current.append(line).append('\n');
+                }
+
+                charOffset += line.length() + 1;
+            }
+        }
+
+        addDocumentUnitIfUseful(units, current, currentStartOffset, syntheticPrefixLength);
+        return units.isEmpty() ? resolveUnstructuredDocumentUnits(markdownPath) : units;
+    }
+
+    private List<DocumentUnit> resolveUnstructuredDocumentUnits(Path markdownPath) throws IOException {
+        List<DocumentUnit> units = new ArrayList<>();
+        int maxUnitChars = Math.max(maxStructuredUnitLength, chunkSize * 20);
+        StringBuilder current = new StringBuilder();
+        int currentStartOffset = 0;
+        int charOffset = 0;
+
+        try (BufferedReader reader = Files.newBufferedReader(markdownPath, StandardCharsets.UTF_8)) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                if (current.isEmpty()) {
+                    currentStartOffset = charOffset;
+                }
+                current.append(line).append('\n');
+                charOffset += line.length() + 1;
+
+                if (current.length() >= maxUnitChars && line.isBlank()) {
+                    addDocumentUnitIfUseful(units, current, currentStartOffset, 0);
+                    current = new StringBuilder();
+                }
+            }
+        }
+
+        addDocumentUnitIfUseful(units, current, currentStartOffset, 0);
+        return units;
+    }
+
+    private void streamStructuredDocumentUnits(Path markdownPath, DocumentUnitHandler handler) throws IOException {
+        List<HeadingContext> headings = new ArrayList<>();
+        StringBuilder current = new StringBuilder();
+        int currentStartOffset = 0;
+        int syntheticPrefixLength = 0;
+        int charOffset = 0;
+
+        try (BufferedReader reader = Files.newBufferedReader(markdownPath, StandardCharsets.UTF_8)) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                HeadingContext heading = parseHeading(line);
+                if (heading != null) {
+                    emitDocumentUnitIfUseful(handler, current, currentStartOffset, syntheticPrefixLength);
+
+                    headings.removeIf(existing -> existing.level() >= heading.level());
+                    String prefix = buildHeadingPrefix(headings);
+                    current = new StringBuilder(prefix);
+                    syntheticPrefixLength = prefix.length();
+                    currentStartOffset = charOffset;
+                    current.append(line).append('\n');
+                    headings.add(heading);
+                } else {
+                    if (current.isEmpty()) {
+                        currentStartOffset = charOffset;
+                        syntheticPrefixLength = 0;
+                    }
+                    current.append(line).append('\n');
+                }
+
+                charOffset += line.length() + 1;
+            }
+        }
+
+        emitDocumentUnitIfUseful(handler, current, currentStartOffset, syntheticPrefixLength);
+    }
+
+    private void streamUnstructuredDocumentUnits(Path markdownPath, DocumentUnitHandler handler) throws IOException {
+        int maxUnitChars = Math.max(maxStructuredUnitLength, chunkSize * 20);
+        StringBuilder current = new StringBuilder();
+        int currentStartOffset = 0;
+        int charOffset = 0;
+
+        try (BufferedReader reader = Files.newBufferedReader(markdownPath, StandardCharsets.UTF_8)) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                if (current.isEmpty()) {
+                    currentStartOffset = charOffset;
+                }
+                current.append(line).append('\n');
+                charOffset += line.length() + 1;
+
+                if (current.length() >= maxUnitChars && line.isBlank()) {
+                    emitDocumentUnitIfUseful(handler, current, currentStartOffset, 0);
+                    current = new StringBuilder();
+                }
+            }
+        }
+
+        emitDocumentUnitIfUseful(handler, current, currentStartOffset, 0);
+    }
+
+    private void addDocumentUnitIfUseful(List<DocumentUnit> units, StringBuilder text,
+                                         int sourceStartOffset, int syntheticPrefixLength) {
+        if (text == null || text.isEmpty()) {
+            return;
+        }
+        String unitText = text.toString().trim();
+        if (unitText.isBlank() || !containsContentBeyondHeadings(unitText)) {
+            return;
+        }
+        units.add(new DocumentUnit(unitText, sourceStartOffset, syntheticPrefixLength));
+    }
+
+    private void emitDocumentUnitIfUseful(DocumentUnitHandler handler, StringBuilder text,
+                                          int sourceStartOffset, int syntheticPrefixLength) throws IOException {
+        if (text == null || text.isEmpty()) {
+            return;
+        }
+        String unitText = text.toString().trim();
+        if (unitText.isBlank() || !containsContentBeyondHeadings(unitText)) {
+            return;
+        }
+        handler.handle(new DocumentUnit(unitText, sourceStartOffset, syntheticPrefixLength));
+    }
+
+    private HeadingContext parseHeading(String line) {
+        Matcher markdownHeading = MARKDOWN_HEADING_LINE.matcher(line);
+        if (markdownHeading.matches()) {
+            int level = markdownHeading.group(1).length();
+            String title = markdownHeading.group(2).replaceAll("\\s+#*$", "").trim();
+            return new HeadingContext(level, title);
+        }
+
+        if (COMPAT_HEADING_LINE.matcher(line).matches()) {
+            return new HeadingContext(1, line.trim());
+        }
+
+        return null;
+    }
+
+    private boolean containsContentBeyondHeadings(String text) {
+        return !Pattern.compile("(?m)^#{1,6}\\s+.+$").matcher(text).replaceAll("").trim().isEmpty();
+    }
+
+    private String buildHeadingPrefix(List<HeadingContext> headings) {
+        if (headings.isEmpty()) {
+            return "";
+        }
+
+        StringBuilder prefix = new StringBuilder();
+        for (HeadingContext heading : headings) {
+            prefix.append("#".repeat(Math.max(1, Math.min(6, heading.level()))))
+                    .append(" ")
+                    .append(heading.title())
+                    .append("\n\n");
+        }
+        return prefix.toString();
+    }
+
+    private String readMarkdownSample(Path markdownPath, int maxChars) throws IOException {
+        int limit = Math.max(1, maxChars);
+        StringBuilder sample = new StringBuilder(Math.min(limit, 8192));
+        try (BufferedReader reader = Files.newBufferedReader(markdownPath, StandardCharsets.UTF_8)) {
+            String line;
+            while ((line = reader.readLine()) != null && sample.length() < limit) {
+                int remaining = limit - sample.length();
+                if (line.length() > remaining) {
+                    sample.append(line, 0, remaining);
+                    break;
+                }
+                sample.append(line).append('\n');
+            }
+        }
+        return sample.toString();
+    }
+
     /**
-     * 根据文档结构和文本长度，决定处理单元。
-     * ≤ 25万字符 → 完整文档；> 25万字符且有结构 → 按章拆分子文档；> 25万字符无结构 → 全文（调用方负责切换 CCH 上下文）。
+     * 根据文档结构决定处理单元。
+     * 有结构文档始终按标题层级拆分；单个结构单元过大时优先继续向低级标题拆分。
+     * 无结构文档保持全文单元，由调用方按实际 chunk 数决定是否切换 CCH。
      *
      * @return 文档单元列表（每个元素独立走切分+上下文生成）
      */
-    private List<String> resolveDocumentUnits(String fullText) {
-        if (fullText.length() <= maxTextLength) {
-            logger.debug("文档大小 {} 字，未超限，完整文档走标准路径", fullText.length());
-            return List.of(fullText);
-        }
-
-        boolean hasStructure = structureDetector.hasStructure(fullText);
-        logger.info("文档超限 ({} > {}), 结构检测: {}", fullText.length(), maxTextLength,
-                hasStructure ? "有结构-按章拆分" : "无结构-CCH降级");
-
+    private List<DocumentUnit> resolveDocumentUnits(String fullText, boolean hasStructure) {
         if (hasStructure) {
+            List<StructuredDocumentUnit> structuredUnits =
+                    structureDetector.splitStructuredDocument(fullText, maxStructuredUnitLength);
+            if (!structuredUnits.isEmpty()) {
+                logger.info("按 Markdown 标题层级拆分为 {} 个文档单元", structuredUnits.size());
+                return structuredUnits.stream()
+                        .map(unit -> new DocumentUnit(
+                                unit.text(),
+                                unit.sourceStartOffset(),
+                                unit.syntheticPrefixLength()))
+                        .toList();
+            }
+
             List<String> chapters = structureDetector.splitByChapters(fullText);
-            logger.info("按章节拆分为 {} 个子文档", chapters.size());
-            return chapters;
+            logger.info("Markdown 标题层级不可用，按兼容章节规则拆分为 {} 个文档单元", chapters.size());
+            return toDocumentUnits(fullText, chapters);
         }
 
-        // CCH 降级：由调用方 parseAndSave 负责将 llmContext 替换为 CCH 固定前缀
-        return List.of(fullText);
+        logger.debug("无结构文档保持全文单元: {} chars, CCH chunk 阈值: {}",
+                fullText.length(), cchFallbackMaxChunks);
+        return List.of(new DocumentUnit(fullText, 0, 0));
+    }
+
+    private List<DocumentUnit> toDocumentUnits(String fullText, List<String> unitTexts) {
+        List<DocumentUnit> units = new ArrayList<>();
+        int searchStart = 0;
+        for (String unitText : unitTexts) {
+            if (unitText == null || unitText.isBlank()) {
+                continue;
+            }
+            int startOffset = fullText.indexOf(unitText, searchStart);
+            if (startOffset < 0) {
+                startOffset = fullText.indexOf(unitText);
+            }
+            if (startOffset < 0) {
+                logger.warn("无法定位文档单元在全文中的偏移，使用 0 作为起点: unitLength={}", unitText.length());
+                startOffset = 0;
+            }
+            units.add(new DocumentUnit(unitText, startOffset, 0));
+            searchStart = Math.max(searchStart, startOffset + unitText.length());
+        }
+        return units.isEmpty() ? List.of(new DocumentUnit(fullText, 0, 0)) : units;
+    }
+
+    private List<ChunkUnit> shiftChunkOffsets(List<ChunkUnit> chunks, int offsetDelta) {
+        if (offsetDelta == 0) {
+            return chunks;
+        }
+        return chunks.stream()
+                .map(chunk -> new ChunkUnit(
+                        chunk.content(),
+                        chunk.docTitle(),
+                        chunk.headingPath(),
+                        chunk.blockType(),
+                        Math.max(0, chunk.startOffset() + offsetDelta),
+                        Math.max(0, chunk.endOffset() + offsetDelta),
+                        chunk.tokenLength()))
+                .toList();
     }
 
     /**
@@ -302,6 +660,9 @@ public class ParseService {
         if (m3.find() && sections.isEmpty()) {
             sb.append("首个章节: ").append(m3.group().trim()).append("。");
         }
+        if (sb.isEmpty()) {
+            sb.append("文档无显式章节结构，以下片段来自同一份超长文档。");
+        }
         return sb.toString();
     }
 
@@ -316,7 +677,7 @@ public class ParseService {
      * @param isPublic        是否公开
      * @param chunks          文本 chunk 列表
      * @param documentBrief   文档级画像（主题、章节、关键实体）
-     * @param localContext    当前 chunk 所在章节/文档单元上下文
+     * @param fallbackLocalContext CCH 固定前缀；非空时直接作为上下文前缀并跳过逐 chunk LLM
      * @param startingChunkId chunk 起始序号
      * @return 保存后的最终 chunk 序号
      */
@@ -333,7 +694,9 @@ public class ParseService {
             String localContext = combineLocalContext(structuralContext, fallbackLocalContext);
 
             String contextualizedContent;
-            if (shouldSkipLlmContext(chunkUnit)) {
+            if (fallbackLocalContext != null && !fallbackLocalContext.isBlank()) {
+                contextualizedContent = buildContextualizedContent(localContext, chunk, currentChunkId);
+            } else if (shouldSkipLlmContext(chunkUnit)) {
                 // 自包含短文本、表格、代码块优先使用确定性结构上下文，减少 LLM 成本和网络风险。
                 contextualizedContent = structuralContext.isBlank()
                         ? chunk
@@ -380,6 +743,27 @@ public class ParseService {
 
         logger.info("Chunk 上下文生成+入库完成: {} chunks (起始序号 {})", chunks.size(), startingChunkId + 1);
         return currentChunkId;
+    }
+
+    private record DocumentUnit(String text, int sourceStartOffset, int syntheticPrefixLength) {
+    }
+
+    private record DocumentPlan(Path markdownPath, List<DocumentUnit> units, boolean hasStructure,
+                                String cchContext, boolean forceCchFallback, boolean streaming) {
+    }
+
+    private record HeadingContext(int level, String title) {
+    }
+
+    private static class ProcessingState {
+        private int unitCount;
+        private int totalChunks;
+        private int currentChunkId;
+    }
+
+    @FunctionalInterface
+    private interface DocumentUnitHandler {
+        void handle(DocumentUnit documentUnit) throws IOException;
     }
 
     private boolean shouldSkipLlmContext(ChunkUnit chunkUnit) {

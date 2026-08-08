@@ -77,14 +77,53 @@ abstract class AbstractLocalTextParser implements DocumentParser {
 
     protected ParseResult result(ParseRequest request, String markdown, String title) {
         String normalizedMarkdown = normalize(markdown);
+        Path markdownPath = writeMarkdownTempFile(request, normalizedMarkdown);
+        return resultFromFile(request, markdownPath,
+                blankToDefault(title, extractTitle(normalizedMarkdown, request.normalizedFileName())));
+    }
+
+    protected ParseResult resultFromFile(ParseRequest request, Path markdownPath, String title) {
         return new ParseResult(
-                normalizedMarkdown,
-                blankToDefault(title, extractTitle(normalizedMarkdown, request.normalizedFileName())),
+                markdownPath,
+                fileSize(markdownPath),
+                contentHash(markdownPath),
+                blankToDefault(title, stripExtension(request.normalizedFileName())),
                 request.language(),
                 parserType(),
                 parserVersion(),
                 parserConfigHash(request)
         );
+    }
+
+    private Path writeMarkdownTempFile(ParseRequest request, String markdown) {
+        try {
+            Path source = request.localFile();
+            Path dir = source != null && source.getParent() != null
+                    ? source.getParent()
+                    : Path.of(System.getProperty("java.io.tmpdir"));
+            Files.createDirectories(dir);
+            Path target = Files.createTempFile(dir, "parsed-markdown-", ".md");
+            Files.writeString(target, markdown, StandardCharsets.UTF_8);
+            return target;
+        } catch (IOException e) {
+            throw new IllegalStateException("写入解析 Markdown 临时文件失败: " + request.normalizedFileName(), e);
+        }
+    }
+
+    private long fileSize(Path path) {
+        try {
+            return Files.size(path);
+        } catch (IOException e) {
+            throw new IllegalStateException("读取 Markdown 临时文件大小失败: " + path, e);
+        }
+    }
+
+    private String contentHash(Path path) {
+        try (var inputStream = Files.newInputStream(path)) {
+            return org.apache.commons.codec.digest.DigestUtils.sha256Hex(inputStream);
+        } catch (IOException e) {
+            throw new IllegalStateException("计算 Markdown 内容 hash 失败: " + path, e);
+        }
     }
 
     private String decode(byte[] bytes, Charset charset) throws CharacterCodingException {

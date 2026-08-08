@@ -1,3 +1,5 @@
+# 历史示例阈值文件。
+# 当前第三期代码不读取这里，请以 eval/config/eval-profile.yml 为准。
 thresholds:
   hitAt5: 0.85
   recallAt10: 0.80

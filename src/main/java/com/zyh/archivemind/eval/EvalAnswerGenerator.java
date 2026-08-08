@@ -43,7 +43,7 @@ public class EvalAnswerGenerator {
 
         LlmRequest request = LlmRequest.builder()
                 .messages(List.of(
-                        LlmMessage.system("你是 ArchiveMind 离线评测回答器。只能依据给定参考片段回答；如果片段不足，请回答\"暂无相关信息\"并说明原因。回答必须使用简体中文。"),
+                        LlmMessage.system("你是 ArchiveMind 离线评测回答器。只能依据给定参考片段回答；如果片段不足，请回答\"暂无相关信息\"并说明原因。回答必须使用简体中文。列表题必须先完整合并所有参考片段中的枚举项，不要因为某项出现在靠后的片段就遗漏。"),
                         LlmMessage.user(userPrompt)
                 ))
                 .params(GenerationParams.builder()
@@ -118,6 +118,7 @@ public class EvalAnswerGenerator {
             sb.append("\n").append(text).append("\n\n");
         }
         sb.append("要求：先给结论，再给依据；如引用片段，请使用 [N]；不得编造片段外信息。");
+        sb.append("如果问题是在问“有哪些/支持哪些/包括哪些”，请先通读全部参考片段，合并所有明确出现的条目后再回答。");
         return sb.toString();
     }
 }

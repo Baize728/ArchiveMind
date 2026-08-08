@@ -1,5 +1,7 @@
 package com.zyh.archivemind.service;
 
+import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.core.JsonToken;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.netty.channel.ChannelOption;
@@ -9,6 +11,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.FileSystemResource;
+import org.springframework.core.io.buffer.DataBufferUtils;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.MultipartBodyBuilder;
@@ -18,7 +21,11 @@ import org.springframework.web.reactive.function.BodyInserters;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.netty.http.client.HttpClient;
 
+import java.io.Writer;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -105,9 +112,27 @@ public class LlamaParseClient {
      * @throws LlamaParseException 解析失败（网络/API 错误 / 超时）
      */
     public String parse(Path filePath) {
+        Path markdownPath = parseToFile(filePath, defaultOutputDir(filePath));
+        try {
+            return Files.readString(markdownPath, StandardCharsets.UTF_8);
+        } catch (Exception e) {
+            throw new LlamaParseException("读取 LlamaParse Markdown 结果失败: " + e.getMessage(), e);
+        } finally {
+            try {
+                Files.deleteIfExists(markdownPath);
+            } catch (Exception e) {
+                logger.warn("无法删除 LlamaParse Markdown 临时文件: {}, 原因: {}", markdownPath, e.getMessage());
+            }
+        }
+    }
+
+    /**
+     * 解析文件，直接将 Markdown 结果写入本地文件，避免完整结果进入 JVM String 主链路。
+     */
+    public Path parseToFile(Path filePath, Path outputDir) {
         String jobId = upload(filePath);
         waitForCompletion(jobId);
-        return fetchResult(jobId);
+        return fetchResultToFile(jobId, outputDir);
     }
 
     // ===================== Step 1: Upload =====================
@@ -327,10 +352,16 @@ public class LlamaParseClient {
      * 获取 Markdown 解析结果。
      * 官方 v2 API 通过 GET /parse/{job_id}?expand=markdown_full 返回完整 Markdown。
      */
-    private String fetchResult(String jobId) {
+    private Path fetchResultToFile(String jobId, Path outputDir) {
         String expandValue = resolveExpandValue();
+        Path responseFile = null;
+        Path markdownFile = null;
         try {
-            String response = webClient.get()
+            Files.createDirectories(outputDir);
+            responseFile = Files.createTempFile(outputDir, "llamaparse-response-", ".json");
+            markdownFile = Files.createTempFile(outputDir, "llamaparse-result-", ".md");
+
+            var dataBuffers = webClient.get()
                     .uri(uriBuilder -> uriBuilder
                             .path("/parse/{jobId}")
                             .queryParam("expand", expandValue)
@@ -340,29 +371,97 @@ public class LlamaParseClient {
                             resp -> resp.bodyToMono(String.class)
                                     .map(body -> new LlamaParseException(
                                             "获取解析结果失败: HTTP " + resp.statusCode() + " - " + body)))
-                    .bodyToMono(String.class)
+                    .bodyToFlux(org.springframework.core.io.buffer.DataBuffer.class);
+
+            DataBufferUtils.write(
+                            dataBuffers,
+                            responseFile,
+                            StandardOpenOption.CREATE,
+                            StandardOpenOption.TRUNCATE_EXISTING,
+                            StandardOpenOption.WRITE)
                     .block(Duration.ofSeconds(resultRequestTimeoutSeconds));
 
-            if (response == null || response.isBlank()) {
+            if (!Files.exists(responseFile) || Files.size(responseFile) == 0) {
                 throw new LlamaParseException("获取解析结果失败: 返回空响应, jobId=" + jobId);
             }
 
-            JsonNode node = objectMapper.readTree(response);
-            String status = node.path("job").path("status").asText("UNKNOWN");
-            if (!isCompletedStatus(status)) {
-                throw new LlamaParseException("LlamaParse job 未完成, jobId=" + jobId + ", status=" + status);
-            }
+            extractMarkdownResult(responseFile, markdownFile, expandValue, jobId);
 
-            String result = node.path(expandValue).asText();
-            if (result == null || result.isBlank()) {
+            if (!Files.exists(markdownFile) || Files.size(markdownFile) == 0) {
                 throw new LlamaParseException("解析结果为空, jobId=" + jobId + ", expand=" + expandValue);
             }
-            logger.info("LlamaParse 结果获取成功, jobId: {}, 文本长度: {} chars", jobId, result.length());
-            return result;
+            logger.info("LlamaParse 结果获取成功, jobId: {}, markdownFile: {}, bytes: {}",
+                    jobId, markdownFile, Files.size(markdownFile));
+            return markdownFile;
         } catch (LlamaParseException e) {
+            deleteQuietly(markdownFile);
             throw e;
         } catch (Exception e) {
+            deleteQuietly(markdownFile);
             throw new LlamaParseException("获取解析结果异常: " + e.getMessage(), e);
+        } finally {
+            deleteQuietly(responseFile);
+        }
+    }
+
+    private void extractMarkdownResult(Path responseFile, Path markdownFile,
+                                       String expandValue, String jobId) throws Exception {
+        String jobStatus = "UNKNOWN";
+        boolean resultWritten = false;
+
+        try (JsonParser parser = objectMapper.getFactory().createParser(responseFile.toFile())) {
+            while (parser.nextToken() != null) {
+                if (parser.currentToken() != JsonToken.FIELD_NAME) {
+                    continue;
+                }
+
+                String fieldName = parser.currentName();
+                JsonToken valueToken = parser.nextToken();
+                if ("status".equals(fieldName) && valueToken == JsonToken.VALUE_STRING) {
+                    jobStatus = parser.getValueAsString("UNKNOWN");
+                    continue;
+                }
+
+                if (expandValue.equals(fieldName)) {
+                    if (valueToken != JsonToken.VALUE_STRING) {
+                        parser.skipChildren();
+                        continue;
+                    }
+                    try (Writer writer = Files.newBufferedWriter(markdownFile, StandardCharsets.UTF_8,
+                            StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE)) {
+                        parser.getText(writer);
+                    }
+                    resultWritten = true;
+                    continue;
+                }
+
+                parser.skipChildren();
+            }
+        }
+
+        if (!isCompletedStatus(jobStatus)) {
+            throw new LlamaParseException("LlamaParse job 未完成, jobId=" + jobId + ", status=" + jobStatus);
+        }
+        if (!resultWritten) {
+            throw new LlamaParseException("解析结果缺少字段, jobId=" + jobId + ", expand=" + expandValue);
+        }
+    }
+
+    private Path defaultOutputDir(Path filePath) {
+        if (filePath != null && filePath.getParent() != null) {
+            return filePath.getParent();
+        }
+        return Path.of(System.getProperty("java.io.tmpdir"));
+    }
+
+    private void deleteQuietly(Path path) {
+        if (path == null) {
+            return;
+        }
+        try {
+            Files.deleteIfExists(path);
+        } catch (Exception e) {
+            logger.warn("无法删除临时文件: {}, 原因: {}", path, e.getMessage());
         }
     }
 

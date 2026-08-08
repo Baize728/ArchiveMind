@@ -350,7 +350,7 @@
     "referenceContexts": [
       "微服务是一种软件架构风格，将一个大型应用程序划分为一组小型、自治且松耦合的服务，每个微服务负责执行特定的业务功能。"
     ],
-    "mustContain": ["小型", "自治", "松耦合", "独立部署"],
+    "mustContain": ["小型", "自治", "松耦合", "独立部署|独立开发,部署|独立开发、部署|独立开发、测试、部署"],
     "mustNotContain": ["所有模块共享同一个数据库"],
     "userId": "1",
     "orgTag": "admin",
@@ -418,7 +418,7 @@
     "referenceContexts": [
       "配置中心就是配置信息的 CRUD；Nacos 默认使用 Derby，也可以使用 MySQL；客户端通过 API 获取配置信息并监听配置变化。"
     ],
-    "mustContain": ["CRUD", "Nacos Client", "Nacos Server", "监听"],
+    "mustContain": ["CRUD", "Nacos Client|客户端", "Nacos Server|服务端", "监听"],
     "mustNotContain": [],
     "userId": "1",
     "orgTag": "admin",

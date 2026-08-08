@@ -4,9 +4,20 @@ eval:
     cases-path: eval/cases/rag_eval_cases.json
     output-dir: eval/outputs
     top-k: 10
-    ragas-context-top-k: 5
+    ragas-context-top-k: 6
     generate-answers: false
-    answer-top-k: 5
+    answer-top-k: 6
     answer-timeout-seconds: 90
     max-context-chars: 8000
     exit-on-complete: true
+    case-set-version: 20260807
+    corpus-version: 20260807
+    config-version: 20260807
+    judge-model-version: gpt-5.4-mini
+    hit-at5-threshold: 0.85
+    recall-at10-threshold: 0.80
+    mrr-threshold: 0.65
+    faithfulness-threshold: 0.90
+    answer-relevancy-threshold: 0.95
+    context-precision-threshold: 0.85
+    context-recall-threshold: 0.90
