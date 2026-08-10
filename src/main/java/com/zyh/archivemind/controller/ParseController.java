@@ -24,7 +24,9 @@ public class ParseController {
                     "开始解析文档: fileMd5=%s, fileName=%s, fileSize=%d", 
                     fileMd5, file.getOriginalFilename(), file.getSize());
             
-            parseService.parseAndSave(fileMd5, file.getInputStream());
+            String effectiveUserId = (userId == null || userId.isBlank()) ? "unknown" : userId;
+            parseService.parseAndSave(fileMd5, file.getInputStream(),
+                    file.getOriginalFilename(), effectiveUserId, "DEFAULT", false);
             
             LogUtils.logFileOperation(userId != null ? userId : "system", "PARSE", 
                     file.getOriginalFilename(), fileMd5, "SUCCESS");

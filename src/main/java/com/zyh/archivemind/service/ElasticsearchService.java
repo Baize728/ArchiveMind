@@ -1,6 +1,7 @@
 package com.zyh.archivemind.service;
 
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
+import co.elastic.clients.elasticsearch._types.ErrorCause;
 import co.elastic.clients.elasticsearch.core.BulkRequest;
 import co.elastic.clients.elasticsearch.core.BulkResponse;
 import co.elastic.clients.elasticsearch.core.DeleteByQueryRequest;
@@ -31,6 +32,10 @@ public class ElasticsearchService {
      * @param documents 文档列表，每个文档都将被索引到Elasticsearch中
      */
     public void bulkIndex(List<EsDocument> documents) {
+        if (documents == null || documents.isEmpty()) {
+            logger.warn("bulkIndex 跳过：文档列表为空");
+            return;
+        }
         try {
             logger.info("开始批量索引文档到Elasticsearch，文档数量: {}", documents.size());
             
@@ -52,11 +57,21 @@ public class ElasticsearchService {
             // 检查响应结果
             if (response.errors()) {
                 logger.error("批量索引过程中发生错误:");
+                int errorCount = 0;
+                int detailLimit = 5;
                 for (BulkResponseItem item : response.items()) {
                     if (item.error() != null) {
-                        logger.error("文档索引失败 - ID: {}, 错误: {}", item.id(), item.error().reason());
+                        errorCount++;
+                        if (errorCount <= detailLimit) {
+                            ErrorCause error = item.error();
+                            logger.error("文档索引失败 - ID: {}, status: {}, type: {}, reason: {}, causedBy: {}, rootCause: {}",
+                                    item.id(), item.status(), error.type(), shorten(error.reason()),
+                                    formatCause(error.causedBy()), formatRootCauses(error));
+                        }
                     }
                 }
+                logger.error("ES bulkIndex 失败摘要: total={}, failed={}, detailLogged={}",
+                        documents.size(), errorCount, Math.min(errorCount, detailLimit));
                 throw new RuntimeException("批量索引部分失败，请检查日志");
             } else {
                 logger.info("批量索引成功完成，文档数量: {}", documents.size());
@@ -82,5 +97,69 @@ public class ElasticsearchService {
         } catch (Exception e) {
             throw new RuntimeException("删除文档失败", e);
         }
+    }
+
+    /**
+     * 根据 fileMd5 和 userId 删除指定用户的文档索引，避免影响其他用户上传的同 MD5 文件。
+     *
+     * @param fileMd5 文件指纹
+     * @param userId 上传用户ID
+     */
+    public void deleteByFileMd5AndUserId(String fileMd5, String userId) {
+        try {
+            DeleteByQueryRequest request = DeleteByQueryRequest.of(d -> d
+                    .index("knowledge_base")
+                    .query(q -> q.bool(b -> b
+                            .must(m -> m.term(t -> t.field("fileMd5").value(fileMd5)))
+                            .must(m -> m.term(t -> t.field("userId").value(userId)))
+                    ))
+            );
+            esClient.deleteByQuery(request);
+            logger.info("已从 Elasticsearch 删除旧文档索引，fileMd5: {}, userId: {}", fileMd5, userId);
+        } catch (Exception e) {
+            throw new RuntimeException("删除用户文档索引失败", e);
+        }
+    }
+
+    private String formatRootCauses(ErrorCause error) {
+        if (error == null || error.rootCause() == null || error.rootCause().isEmpty()) {
+            return "null";
+        }
+        return error.rootCause().stream()
+                .limit(3)
+                .map(this::formatCause)
+                .toList()
+                .toString();
+    }
+
+    private String formatCause(ErrorCause cause) {
+        if (cause == null) {
+            return "null";
+        }
+        StringBuilder sb = new StringBuilder();
+        ErrorCause current = cause;
+        int depth = 0;
+        while (current != null && depth < 4) {
+            if (depth > 0) {
+                sb.append(" <- ");
+            }
+            sb.append("{type=").append(current.type())
+                    .append(", reason=").append(shorten(current.reason()))
+                    .append("}");
+            current = current.causedBy();
+            depth++;
+        }
+        return sb.toString();
+    }
+
+    private String shorten(String value) {
+        if (value == null) {
+            return "null";
+        }
+        int maxLength = 500;
+        if (value.length() <= maxLength) {
+            return value;
+        }
+        return value.substring(0, maxLength) + "...";
     }
 }

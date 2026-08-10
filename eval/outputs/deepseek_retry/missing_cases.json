@@ -1,0 +1,156 @@
+[
+  {
+    "caseId": "micro_intro_001",
+    "caseType": "definition",
+    "question": "什么是微服务？",
+    "reference": "微服务是一种软件架构风格，把大型应用拆分为一组小型、自治且松耦合的服务。每个服务负责特定业务功能，通过轻量级通信机制协作，并可以独立开发、部署和扩展。",
+    "goldFileMd5": "47eb4d9a714814478bfe77fd4f79cb8e",
+    "goldChunkIds": [
+      2
+    ],
+    "referenceContexts": [
+      "微服务是一种软件架构风格，将一个大型应用程序划分为一组小型、自治且松耦合的服务，每个微服务负责执行特定的业务功能。"
+    ],
+    "mustContain": [
+      "小型",
+      "自治",
+      "松耦合",
+      "独立部署"
+    ],
+    "mustNotContain": [
+      "所有模块共享同一个数据库"
+    ],
+    "userId": "1",
+    "orgTag": "admin",
+    "isPublic": true,
+    "expectedAnswerable": true
+  },
+  {
+    "caseId": "micro_challenge_001",
+    "caseType": "list",
+    "question": "微服务会带来哪些挑战？",
+    "reference": "微服务会带来系统复杂性增加、服务间通信开销、数据一致性和事务管理复杂、部署运维复杂、团队沟通协作成本增加、服务治理和版本管理复杂、分布式系统复杂性等挑战。",
+    "goldFileMd5": "47eb4d9a714814478bfe77fd4f79cb8e",
+    "goldChunkIds": [
+      4
+    ],
+    "referenceContexts": [
+      "服务拆分后可能带来系统复杂性增加、服务间通信开销、数据一致性和事务管理、部署和运维复杂性、团队沟通和协作成本、服务治理和版本管理等问题。"
+    ],
+    "mustContain": [
+      "系统复杂性",
+      "通信开销",
+      "数据一致性",
+      "部署"
+    ],
+    "mustNotContain": [
+      "没有额外成本"
+    ],
+    "userId": "1",
+    "orgTag": "admin",
+    "isPublic": true,
+    "expectedAnswerable": true
+  },
+  {
+    "caseId": "micro_registry_001",
+    "caseType": "definition",
+    "question": "注册中心是用来干什么的？",
+    "reference": "注册中心用于管理和维护分布式系统中各个服务的地址和元数据，实现服务注册与服务发现，同时支持负载均衡、故障恢复和服务治理等能力。",
+    "goldFileMd5": "47eb4d9a714814478bfe77fd4f79cb8e",
+    "goldChunkIds": [
+      13
+    ],
+    "referenceContexts": [
+      "注册中心主要用于实现服务发现和服务注册，并可以提供负载均衡、故障恢复、服务治理等能力。"
+    ],
+    "mustContain": [
+      "服务注册",
+      "服务发现",
+      "负载均衡",
+      "故障恢复"
+    ],
+    "mustNotContain": [],
+    "userId": "1",
+    "orgTag": "admin",
+    "isPublic": true,
+    "expectedAnswerable": true
+  },
+  {
+    "caseId": "micro_registry_002",
+    "caseType": "comparison",
+    "question": "Eureka、ZooKeeper、Nacos 的主要区别是什么？",
+    "reference": "Eureka 由 Netflix 开发，偏 AP，访问协议是 HTTP，适合基于 HTTP 的微服务架构；ZooKeeper 来自 Apache，偏 CP，使用 TCP，提供分布式协调、配置管理和分布式锁；Nacos 来自阿里巴巴，既支持 AP 也支持 CP，支持 HTTP/DNS，面向微服务和云原生应用。",
+    "goldFileMd5": "47eb4d9a714814478bfe77fd4f79cb8e",
+    "goldChunkIds": [
+      15
+    ],
+    "referenceContexts": [
+      "Eureka 是 AP，ZooKeeper 是 CP，Nacos 既支持 AP 也支持 CP；三者在开发方、定位、访问协议、数据存储和健康检查上都有区别。"
+    ],
+    "mustContain": [
+      "Eureka",
+      "ZooKeeper",
+      "Nacos",
+      "AP",
+      "CP"
+    ],
+    "mustNotContain": [],
+    "userId": "1",
+    "orgTag": "admin",
+    "isPublic": true,
+    "expectedAnswerable": true
+  },
+  {
+    "caseId": "micro_gateway_001",
+    "caseType": "definition",
+    "question": "Spring Cloud Gateway 的核心概念有哪些？",
+    "reference": "Spring Cloud Gateway 的核心概念包括 Route、Predicate 和 Filter。Route 定义请求匹配规则和转发目标，Predicate 用来匹配请求条件，Filter 用于处理和转换请求或响应，也可以组成过滤器链。",
+    "goldFileMd5": "47eb4d9a714814478bfe77fd4f79cb8e",
+    "goldChunkIds": [
+      43,
+      44
+    ],
+    "referenceContexts": [
+      "Spring Cloud Gateway 有三个关键组件：Route 路由、Predicate 断言、Filter 过滤器。",
+      "Filter 用于对请求进行处理和转换，可以修改请求、响应以及执行其他自定义逻辑。"
+    ],
+    "mustContain": [
+      "路由",
+      "断言",
+      "过滤器"
+    ],
+    "mustNotContain": [],
+    "userId": "1",
+    "orgTag": "admin",
+    "isPublic": true,
+    "expectedAnswerable": true
+  },
+  {
+    "caseId": "micro_seata_001",
+    "caseType": "list",
+    "question": "Seata 支持哪些分布式事务模式？",
+    "reference": "Seata 支持 AT、TCC、SAGA、XA 等分布式事务模式。AT 是默认常用模式，TCC 基于 Try-Confirm-Cancel 补偿机制，SAGA 基于事件驱动，XA 基于两阶段提交协议。",
+    "goldFileMd5": "47eb4d9a714814478bfe77fd4f79cb8e",
+    "goldChunkIds": [
+      50,
+      52,
+      53,
+      54
+    ],
+    "referenceContexts": [
+      "Seata 支持 AT 模式、TCC 模式、SAGA 模式和 XA 模式。",
+      "TCC 模式需要实现 Try、Confirm、Cancel 三个阶段；SAGA 是基于事件驱动的分布式事务模式；XA 是基于两阶段提交协议的模式。"
+    ],
+    "mustContain": [
+      "AT",
+      "TCC",
+      "SAGA",
+      "XA"
+    ],
+    "mustNotContain": [],
+    "userId": "1",
+    "orgTag": "admin",
+    "isPublic": true,
+    "expectedAnswerable": true
+  }
+]

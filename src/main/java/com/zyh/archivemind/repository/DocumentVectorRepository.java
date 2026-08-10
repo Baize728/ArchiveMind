@@ -4,20 +4,38 @@ import com.zyh.archivemind.model.DocumentVector;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
 public interface DocumentVectorRepository extends JpaRepository<DocumentVector, Long> {
     List<DocumentVector> findByFileMd5(String fileMd5); // 查询某文件的所有分块
-    
+
+    List<DocumentVector> findByFileMd5OrderByChunkIdAsc(String fileMd5);
+
+    List<DocumentVector> findByFileMd5AndUserIdOrderByChunkIdAsc(String fileMd5, String userId);
+
+    long countByFileMd5AndUserId(String fileMd5, String userId);
+
     /**
      * 删除指定文件MD5的所有文档向量记录
-     * 
+     *
      * @param fileMd5 文件MD5
      */
     @Transactional
     @Modifying
     @Query(value = "DELETE FROM document_vectors WHERE file_md5 = ?1", nativeQuery = true)
     void deleteByFileMd5(String fileMd5);
+
+    /**
+     * 删除指定用户下指定文件MD5的所有文档向量记录。
+     *
+     * @param fileMd5 文件MD5
+     * @param userId 上传用户ID
+     */
+    @Transactional
+    @Modifying
+    @Query(value = "DELETE FROM document_vectors WHERE file_md5 = ?1 AND user_id = ?2", nativeQuery = true)
+    void deleteByFileMd5AndUserId(String fileMd5, String userId);
 }

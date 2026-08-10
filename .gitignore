@@ -30,13 +30,22 @@ target/
 
 ### VS Code ###
 .vscode/
-./src/main/resources/application.yml
-./docs
-./.kiro/skills
-
+src/main/resources/application.yml
+docs/
+.kiro/skills
 .kiro/specs/
-docs/面试准备-多LLM抽象层.md
+.claude/
 
-# 环境变量配置（含密钥，不提交）
-.env
-.env.*
+### Python / RAGAS eval ###
+.venv/
+.venv-*/
+venv/
+env/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+eval/config/ragas.env
+
+# 未完成的内置工具
+src/main/java/com/zyh/archivemind/Tool/builtin/KnowledgeStatsTool.java
+src/main/java/com/zyh/archivemind/Tool/builtin/SubmitFeedbackTool.java

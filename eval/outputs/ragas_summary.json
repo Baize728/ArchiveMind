@@ -1,0 +1,28 @@
+{
+  "rows": 30,
+  "failedRows": 0,
+  "missingRows": 0,
+  "partialRows": 0,
+  "fullRows": 30,
+  "contextTruncatedRows": 30,
+  "faithfulness": {
+    "avg": 0.7782271375836628,
+    "min": 0.2,
+    "count": 30
+  },
+  "answer_relevancy": {
+    "avg": 0.9338873293480234,
+    "min": 0.79958201633811,
+    "count": 30
+  },
+  "context_precision": {
+    "avg": 0.9268518518013271,
+    "min": 0.5833333333041666,
+    "count": 30
+  },
+  "context_recall": {
+    "avg": 0.95,
+    "min": 0.0,
+    "count": 30
+  }
+}

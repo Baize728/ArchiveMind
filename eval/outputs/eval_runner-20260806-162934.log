@@ -1,0 +1,260 @@
+[INFO] Scanning for projects...
+[INFO] 
+[INFO] ------------------< com.zyh.archivemind:ArchiveMind >-------------------
+[INFO] Building ArchiveMind 1.0.0-SNAPSHOT
+[INFO]   from pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] >>> spring-boot:3.4.2:run (default-cli) > test-compile @ ArchiveMind >>>
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ ArchiveMind ---
+[INFO] Copying 2 resources from src\main\resources to target\classes
+[INFO] Copying 3 resources from src\main\resources to target\classes
+[INFO] 
+[INFO] --- compiler:3.13.0:compile (default-compile) @ ArchiveMind ---
+[INFO] Recompiling the module because of changed source code.
+[INFO] Compiling 180 source files with javac [debug parameters release 17] to target\classes
+[INFO] /D:/IntelliJ IDEA 2024.3/IdeaProjects/ArchiveMind/src/main/java/com/zyh/archivemind/utils/JwtUtils.java: ĳЩ�����ļ�ʹ�û򸲸����ѹ�ʱ�� API��
+[INFO] /D:/IntelliJ IDEA 2024.3/IdeaProjects/ArchiveMind/src/main/java/com/zyh/archivemind/utils/JwtUtils.java: �й���ϸ��Ϣ, ��ʹ�� -Xlint:deprecation ���±��롣
+[INFO] /D:/IntelliJ IDEA 2024.3/IdeaProjects/ArchiveMind/src/main/java/com/zyh/archivemind/handler/ChatWebSocketHandler.java: D:\IntelliJ IDEA 2024.3\IdeaProjects\ArchiveMind\src\main\java\com\zyh\archivemind\handler\ChatWebSocketHandler.javaʹ����δ�����򲻰�ȫ�Ĳ�����
+[INFO] /D:/IntelliJ IDEA 2024.3/IdeaProjects/ArchiveMind/src/main/java/com/zyh/archivemind/handler/ChatWebSocketHandler.java: �й���ϸ��Ϣ, ��ʹ�� -Xlint:unchecked ���±��롣
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ ArchiveMind ---
+[INFO] Not copying test resources
+[INFO] 
+[INFO] --- compiler:3.13.0:testCompile (default-testCompile) @ ArchiveMind ---
+[INFO] Not compiling test sources
+[INFO] 
+[INFO] <<< spring-boot:3.4.2:run (default-cli) < test-compile @ ArchiveMind <<<
+[INFO] 
+[INFO] 
+[INFO] --- spring-boot:3.4.2:run (default-cli) @ ArchiveMind ---
+[INFO] Attaching agents: []
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+
+ :: Spring Boot ::                (v3.4.2)
+
+2026-08-06T16:30:24.465+08:00  INFO 29760 --- [ArchiveMind] [           main] c.z.archivemind.ArchiveMindApplication   : Starting ArchiveMindApplication using Java 21.0.5 with PID 29760 (D:\IntelliJ IDEA 2024.3\IdeaProjects\ArchiveMind\target\classes started by lihucheng in D:\IntelliJ IDEA 2024.3\IdeaProjects\ArchiveMind)
+2026-08-06T16:30:24.468+08:00  INFO 29760 --- [ArchiveMind] [           main] c.z.archivemind.ArchiveMindApplication   : The following 1 profile is active: "dev"
+2026-08-06T16:30:25.716+08:00  INFO 29760 --- [ArchiveMind] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Multiple Spring Data modules found, entering strict repository configuration mode
+2026-08-06T16:30:25.718+08:00  INFO 29760 --- [ArchiveMind] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-08-06T16:30:25.968+08:00  INFO 29760 --- [ArchiveMind] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 240 ms. Found 8 JPA repository interfaces.
+2026-08-06T16:30:25.994+08:00  INFO 29760 --- [ArchiveMind] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Multiple Spring Data modules found, entering strict repository configuration mode
+2026-08-06T16:30:25.996+08:00  INFO 29760 --- [ArchiveMind] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data Redis repositories in DEFAULT mode.
+2026-08-06T16:30:26.041+08:00  INFO 29760 --- [ArchiveMind] [           main] .RepositoryConfigurationExtensionSupport : Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.zyh.archivemind.repository.ChunkInfoRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository
+2026-08-06T16:30:26.043+08:00  INFO 29760 --- [ArchiveMind] [           main] .RepositoryConfigurationExtensionSupport : Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.zyh.archivemind.repository.ConversationRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository
+2026-08-06T16:30:26.045+08:00  INFO 29760 --- [ArchiveMind] [           main] .RepositoryConfigurationExtensionSupport : Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.zyh.archivemind.repository.DocumentVectorRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository
+2026-08-06T16:30:26.046+08:00  INFO 29760 --- [ArchiveMind] [           main] .RepositoryConfigurationExtensionSupport : Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.zyh.archivemind.repository.FileUploadRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository
+2026-08-06T16:30:26.046+08:00  INFO 29760 --- [ArchiveMind] [           main] .RepositoryConfigurationExtensionSupport : Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.zyh.archivemind.repository.OrganizationTagRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository
+2026-08-06T16:30:26.046+08:00  INFO 29760 --- [ArchiveMind] [           main] .RepositoryConfigurationExtensionSupport : Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.zyh.archivemind.repository.ParsedDocumentRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository
+2026-08-06T16:30:26.046+08:00  INFO 29760 --- [ArchiveMind] [           main] .RepositoryConfigurationExtensionSupport : Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.zyh.archivemind.repository.UserRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository
+2026-08-06T16:30:26.046+08:00  INFO 29760 --- [ArchiveMind] [           main] .RepositoryConfigurationExtensionSupport : Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.zyh.archivemind.test.TestEntityRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository
+2026-08-06T16:30:26.046+08:00  INFO 29760 --- [ArchiveMind] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 37 ms. Found 0 Redis repository interfaces.
+2026-08-06T16:30:26.959+08:00  INFO 29760 --- [ArchiveMind] [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat initialized with port 0 (http)
+2026-08-06T16:30:26.980+08:00  INFO 29760 --- [ArchiveMind] [           main] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
+2026-08-06T16:30:26.980+08:00  INFO 29760 --- [ArchiveMind] [           main] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/10.1.34]
+2026-08-06T16:30:27.156+08:00  INFO 29760 --- [ArchiveMind] [           main] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring embedded WebApplicationContext
+2026-08-06T16:30:27.157+08:00  INFO 29760 --- [ArchiveMind] [           main] w.s.c.ServletWebServerApplicationContext : Root WebApplicationContext: initialization completed in 2638 ms
+2026-08-06T16:30:27.345+08:00  INFO 29760 --- [ArchiveMind] [           main] o.hibernate.jpa.internal.util.LogHelper  : HHH000204: Processing PersistenceUnitInfo [name: default]
+2026-08-06T16:30:27.429+08:00  INFO 29760 --- [ArchiveMind] [           main] org.hibernate.Version                    : HHH000412: Hibernate ORM core version 6.6.5.Final
+2026-08-06T16:30:27.487+08:00  INFO 29760 --- [ArchiveMind] [           main] o.h.c.internal.RegionFactoryInitiator    : HHH000026: Second-level cache disabled
+2026-08-06T16:30:27.764+08:00  INFO 29760 --- [ArchiveMind] [           main] o.s.o.j.p.SpringPersistenceUnitInfo      : No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-08-06T16:30:27.796+08:00  INFO 29760 --- [ArchiveMind] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Starting...
+2026-08-06T16:30:28.052+08:00  INFO 29760 --- [ArchiveMind] [           main] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Added connection com.mysql.cj.jdbc.ConnectionImpl@2a4cb8ae
+2026-08-06T16:30:28.054+08:00  INFO 29760 --- [ArchiveMind] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Start completed.
+2026-08-06T16:30:28.132+08:00  WARN 29760 --- [ArchiveMind] [           main] org.hibernate.orm.deprecation            : HHH90000025: MySQL8Dialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
+2026-08-06T16:30:28.132+08:00  WARN 29760 --- [ArchiveMind] [           main] org.hibernate.orm.deprecation            : HHH90000026: MySQL8Dialect has been deprecated; use org.hibernate.dialect.MySQLDialect instead
+2026-08-06T16:30:28.157+08:00  INFO 29760 --- [ArchiveMind] [           main] org.hibernate.orm.connections.pooling    : HHH10001005: Database info:
+	Database JDBC URL [Connecting through datasource 'HikariDataSource (HikariPool-1)']
+	Database driver: undefined/unknown
+	Database version: 8.0
+	Autocommit mode: undefined/unknown
+	Isolation level: undefined/unknown
+	Minimum pool size: undefined/unknown
+	Maximum pool size: undefined/unknown
+2026-08-06T16:30:29.406+08:00  INFO 29760 --- [ArchiveMind] [           main] o.h.e.t.j.p.i.JtaPlatformInitiator       : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-08-06T16:30:29.548+08:00  INFO 29760 --- [ArchiveMind] [           main] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-08-06T16:30:30.385+08:00  INFO 29760 --- [ArchiveMind] [           main] o.s.d.j.r.query.QueryEnhancerFactory     : Hibernate is in classpath; If applicable, HQL parser will be used.
+2026-08-06T16:30:36.892+08:00  INFO 29760 --- [ArchiveMind] [           main] c.z.archivemind.service.RerankerService  : RerankerService 初始化完成, apiUrl=http://localhost:8088, model=BAAI/bge-reranker-v2-m3, timeout=60s, maxCandidates=10, maxDocumentChars=1600
+2026-08-06T16:30:36.980+08:00  INFO 29760 --- [ArchiveMind] [           main] c.z.a.Llm.provider.DeepSeekLlmProvider   : DeepSeekLlmProvider 初始化完成，API URL: https://api.deepseek.com/v1, 模型: deepseek-reasoner
+2026-08-06T16:30:36.983+08:00  INFO 29760 --- [ArchiveMind] [           main] c.z.a.Llm.provider.OllamaLlmProvider     : OllamaLlmProvider 初始化完成，模型: deepseek-r1:7b
+2026-08-06T16:30:36.985+08:00  INFO 29760 --- [ArchiveMind] [           main] c.z.a.Llm.provider.OpenAiLlmProvider     : OpenAiLlmProvider 初始化完成
+2026-08-06T16:30:36.990+08:00  INFO 29760 --- [ArchiveMind] [           main] com.zyh.archivemind.Llm.LlmRouter        : 注册 LLM Provider: deepseek, 支持工具调用: true
+2026-08-06T16:30:36.991+08:00  INFO 29760 --- [ArchiveMind] [           main] com.zyh.archivemind.Llm.LlmRouter        : 注册 LLM Provider: ollama, 支持工具调用: false
+2026-08-06T16:30:36.992+08:00  INFO 29760 --- [ArchiveMind] [           main] com.zyh.archivemind.Llm.LlmRouter        : 注册 LLM Provider: openai, 支持工具调用: true
+2026-08-06T16:30:36.993+08:00  INFO 29760 --- [ArchiveMind] [           main] com.zyh.archivemind.Llm.LlmRouter        : LlmRouter 初始化完成，共 3 个 Provider，默认: deepseek
+2026-08-06T16:30:37.009+08:00  INFO 29760 --- [ArchiveMind] [           main] com.zyh.archivemind.Tool.ToolRegistry    : 注册 Tool: generate_summary - 对指定主题的知识库文档生成结构化摘要。适合用户要求整理、总结、归纳、提炼知识库内容时调用；本工具内部会二次调用大模型完成摘要，外层 ReAct 循环只应接收结果，不要把内部摘要过程当作新的工具计划。
+2026-08-06T16:30:37.011+08:00  INFO 29760 --- [ArchiveMind] [           main] com.zyh.archivemind.Tool.ToolRegistry    : 注册 Tool: knowledge_search - 在知识库中搜索与用户问题相关的文档片段。当用户问题的答案可能依赖已上传资料、企业/项目/产品/系统内部信息、专有名词、事实依据、定义、功能、使用方式、实现细节、背景、流程或引用来源时应调用；即使用户没有明确说“查询知识库”，只要问题不像纯通用常识也应先检索。普通问候、闲聊、纯创作、翻译、通用代码/常识问题，或用户明确要求不要查知识库时不要调用。
+2026-08-06T16:30:37.013+08:00  INFO 29760 --- [ArchiveMind] [           main] com.zyh.archivemind.Tool.ToolRegistry    : 注册 Tool: web_fetch - 抓取指定 URL，提取正文转 Markdown。适用静态 / SSR 页面（博客、文档、官网）；JS 渲染或防爬站会返回空正文，本期不重试。
+2026-08-06T16:30:37.014+08:00  INFO 29760 --- [ArchiveMind] [           main] com.zyh.archivemind.Tool.ToolRegistry    : 注册 Tool: web_search - 搜索互联网，获取实时信息（最新版本、官方文档、技术资讯等）。支持 SerpAPI（默认）和 SearXNG（自托管）两种 provider，由 SEARCH_PROVIDER 环境变量切换。
+2026-08-06T16:30:37.014+08:00  INFO 29760 --- [ArchiveMind] [           main] com.zyh.archivemind.Tool.ToolRegistry    : ToolRegistry 初始化完成，共注册 4 个 Tool
+2026-08-06T16:30:37.074+08:00  INFO 29760 --- [ArchiveMind] [           main] c.z.archivemind.client.ClarifyLlmClient  : ClarifyLlmClient 初始化完成, baseUrl=https://api.deepseek.com/v1, model=deepseek-chat, timeout=3000ms
+2026-08-06T16:30:37.090+08:00  INFO 29760 --- [ArchiveMind] [           main] c.z.a.common.DomainAliasMatcher          : DomainAliasMatcher 加载完成，共 27 个别名
+2026-08-06T16:30:37.104+08:00  INFO 29760 --- [ArchiveMind] [           main] c.z.archivemind.client.IntentLlmClient   : IntentLlmClient 初始化完成, apiUrl=https://api.deepseek.com/v1, model=deepseek-chat, timeout=10s
+2026-08-06T16:30:37.106+08:00  INFO 29760 --- [ArchiveMind] [           main] c.z.archivemind.client.RewriteLlmClient  : RewriteLlmClient 初始化完成, apiUrl=https://api.deepseek.com/v1, model=deepseek-chat, timeout=15s
+2026-08-06T16:30:38.453+08:00  INFO 29760 --- [ArchiveMind] [           main] c.z.a.service.ContextGenerator           : ContextGenerator 初始化完成, apiUrl=https://api.deepseek.com/v1, model=deepseek-chat, timeout=60s, connectTimeout=30000ms, sslHandshakeTimeout=30s, maxBriefInputChars=30000, maxLocalContextChars=8000
+2026-08-06T16:30:38.632+08:00  INFO 29760 --- [ArchiveMind] [           main] c.z.a.service.LlamaParseClient           : LlamaParseClient 初始化完成, apiUrl=https://api.cloud.llamaindex.ai/api/v2, timeout=300s
+2026-08-06T16:30:42.079+08:00  INFO 29760 --- [ArchiveMind] [           main] r$InitializeUserDetailsManagerConfigurer : Global AuthenticationManager configured with UserDetailsService bean with name customUserDetailsService
+2026-08-06T16:30:42.495+08:00 DEBUG 29760 --- [ArchiveMind] [           main] o.s.w.s.s.s.WebSocketHandlerMapping      : Patterns [/chat/{token}] in 'webSocketHandlerMapping'
+2026-08-06T16:30:43.413+08:00 DEBUG 29760 --- [ArchiveMind] [           main] s.w.s.m.m.a.RequestMappingHandlerMapping : 49 mappings in 'requestMappingHandlerMapping'
+2026-08-06T16:30:43.544+08:00 DEBUG 29760 --- [ArchiveMind] [           main] o.s.w.s.handler.SimpleUrlHandlerMapping  : Patterns [/webjars/**, /**, /static/**] in 'resourceHandlerMapping'
+2026-08-06T16:30:43.657+08:00  INFO 29760 --- [ArchiveMind] [           main] c.zyh.archivemind.config.SecurityConfig  : Security configuration loaded successfully.
+2026-08-06T16:30:43.725+08:00 DEBUG 29760 --- [ArchiveMind] [           main] o.s.s.web.DefaultSecurityFilterChain     : Will secure any request with filters: DisableEncodeUrlFilter, WebAsyncManagerIntegrationFilter, SecurityContextHolderFilter, HeaderWriterFilter, LogoutFilter, JwtAuthenticationFilter, OrgTagAuthorizationFilter, RequestCacheAwareFilter, SecurityContextHolderAwareRequestFilter, AnonymousAuthenticationFilter, SessionManagementFilter, ExceptionTranslationFilter, AuthorizationFilter
+2026-08-06T16:30:43.961+08:00 DEBUG 29760 --- [ArchiveMind] [           main] s.w.s.m.m.a.RequestMappingHandlerAdapter : ControllerAdvice beans: 0 @ModelAttribute, 0 @InitBinder, 1 RequestBodyAdvice, 1 ResponseBodyAdvice
+2026-08-06T16:30:44.104+08:00 DEBUG 29760 --- [ArchiveMind] [           main] .m.m.a.ExceptionHandlerExceptionResolver : ControllerAdvice beans: 0 @ExceptionHandler, 1 ResponseBodyAdvice
+2026-08-06T16:30:44.984+08:00  INFO 29760 --- [ArchiveMind] [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat started on port 63678 (http) with context path '/'
+2026-08-06T16:30:45.933+08:00  INFO 29760 --- [ArchiveMind] [           main] c.z.archivemind.ArchiveMindApplication   : Started ArchiveMindApplication in 22.071 seconds (process running for 22.785)
+2026-08-06T16:30:45.971+08:00  INFO 29760 --- [ArchiveMind] [           main] c.z.a.config.AdminUserInitializer        : 检查管理员账号是否存在: admin
+Hibernate: select u1_0.id,u1_0.created_at,u1_0.org_tags,u1_0.password,u1_0.primary_org,u1_0.role,u1_0.updated_at,u1_0.username from users u1_0 where u1_0.username=?
+2026-08-06T16:30:47.208+08:00  INFO 29760 --- [ArchiveMind] [           main] c.z.a.config.AdminUserInitializer        : 管理员账号 'admin' 已存在，跳过创建步骤
+Hibernate: select u1_0.id,u1_0.created_at,u1_0.org_tags,u1_0.password,u1_0.primary_org,u1_0.role,u1_0.updated_at,u1_0.username from users u1_0 where u1_0.username=?
+2026-08-06T16:30:47.223+08:00  INFO 29760 --- [ArchiveMind] [           main] c.z.a.config.OrgTagInitializer           : 检查组织标签是否存在: default
+Hibernate: select ot1_0.tag_id from organization_tags ot1_0 where ot1_0.tag_id=? limit ?
+2026-08-06T16:30:47.258+08:00  INFO 29760 --- [ArchiveMind] [           main] c.z.a.config.OrgTagInitializer           : 组织标签 'default' 已存在，跳过创建步骤
+2026-08-06T16:30:47.259+08:00  INFO 29760 --- [ArchiveMind] [           main] c.z.a.config.OrgTagInitializer           : 检查组织标签是否存在: admin
+Hibernate: select ot1_0.tag_id from organization_tags ot1_0 where ot1_0.tag_id=? limit ?
+2026-08-06T16:30:47.269+08:00  INFO 29760 --- [ArchiveMind] [           main] c.z.a.config.OrgTagInitializer           : 组织标签 'admin' 已存在，跳过创建步骤
+2026-08-06T16:30:47.272+08:00  INFO 29760 --- [ArchiveMind] [           main] c.z.a.config.OrgTagInitializer           : 组织标签初始化完成
+2026-08-06T16:30:47.273+08:00  INFO 29760 --- [ArchiveMind] [           main] com.zyh.archivemind.eval.EvalRunner      : 开始 ArchiveMind 离线评测: runId=eval-20260806-163047-4621b1be, cases=D:\IntelliJ IDEA 2024.3\IdeaProjects\ArchiveMind\eval\cases\rag_eval_cases.json, outputDir=D:\IntelliJ IDEA 2024.3\IdeaProjects\ArchiveMind\eval\outputs, topK=10, generateAnswers=false
+Hibernate: select count(pd1_0.id) from parsed_documents pd1_0 where pd1_0.file_md5=? and pd1_0.parse_status=?
+Hibernate: select dv1_0.vector_id,dv1_0.block_type,dv1_0.chunk_id,dv1_0.contextualized_content,dv1_0.doc_title,dv1_0.end_offset,dv1_0.file_md5,dv1_0.heading_path,dv1_0.is_public,dv1_0.model_version,dv1_0.org_tag,dv1_0.start_offset,dv1_0.text_content,dv1_0.token_length,dv1_0.user_id from document_vectors dv1_0 where dv1_0.file_md5=? and dv1_0.user_id=? order by dv1_0.chunk_id
+Hibernate: select u1_0.id,u1_0.created_at,u1_0.org_tags,u1_0.password,u1_0.primary_org,u1_0.role,u1_0.updated_at,u1_0.username from users u1_0 where u1_0.id=?
+Hibernate: select u1_0.id,u1_0.created_at,u1_0.org_tags,u1_0.password,u1_0.primary_org,u1_0.role,u1_0.updated_at,u1_0.username from users u1_0 where u1_0.id=?
+2026-08-06T16:30:49.369+08:00  INFO 29760 --- [ArchiveMind] [           main] c.z.archivemind.client.EmbeddingClient   : 开始生成向量（含缓存检查），文本数量: 1
+2026-08-06T16:30:49.425+08:00  INFO 29760 --- [ArchiveMind] [           main] c.z.archivemind.client.EmbeddingClient   : 向量生成完成，总数量: 1
+2026-08-06T16:30:50.491+08:00 DEBUG 29760 --- [ArchiveMind] [           main] o.s.w.r.f.client.ExchangeFunctions       : [4a332d23] HTTP POST http://localhost:8088/rerank
+2026-08-06T16:30:51.798+08:00  INFO 29760 --- [ArchiveMind] [ntainer#0-0-C-1] o.s.k.l.KafkaMessageListenerContainer    : file-processing-group: partitions assigned: [file-processing-topic1-0]
+2026-08-06T16:30:52.866+08:00 DEBUG 29760 --- [ArchiveMind] [ctor-http-nio-2] org.springframework.web.HttpLogging      : [4a332d23] Encoding [{model=BAAI/bge-reranker-v2-m3, query=什么是 CAP 原则？, documents=[该片段来自《分布式理论》章节，讲解CAP原则的定义及C、A、P三要素的含义， (truncated)...]
+2026-08-06T16:31:08.885+08:00 DEBUG 29760 --- [ArchiveMind] [ctor-http-nio-2] o.s.w.r.f.client.ExchangeFunctions       : [4a332d23] [2d4f70f7-1] Response 200 OK
+2026-08-06T16:31:08.937+08:00 DEBUG 29760 --- [ArchiveMind] [ctor-http-nio-2] org.springframework.web.HttpLogging      : [4a332d23] [2d4f70f7-1] Decoded [{model=BAAI/bge-reranker-v2-m3, results=[{index=0, relevance_score=0.9961965084075928, document={tex (truncated)...]
+2026-08-06T16:31:08.945+08:00  INFO 29760 --- [ArchiveMind] [           main] c.z.archivemind.service.RerankerService  : Reranker 完成, 候选:50 -> 精排:10 -> topK:10, 耗时:18646ms
+Hibernate: select fu1_0.id,fu1_0.created_at,fu1_0.file_md5,fu1_0.file_name,fu1_0.is_public,fu1_0.merged_at,fu1_0.org_tag,fu1_0.status,fu1_0.total_size,fu1_0.user_id from file_upload fu1_0 where fu1_0.file_md5 in (?)
+Hibernate: select count(pd1_0.id) from parsed_documents pd1_0 where pd1_0.file_md5=? and pd1_0.parse_status=?
+Hibernate: select dv1_0.vector_id,dv1_0.block_type,dv1_0.chunk_id,dv1_0.contextualized_content,dv1_0.doc_title,dv1_0.end_offset,dv1_0.file_md5,dv1_0.heading_path,dv1_0.is_public,dv1_0.model_version,dv1_0.org_tag,dv1_0.start_offset,dv1_0.text_content,dv1_0.token_length,dv1_0.user_id from document_vectors dv1_0 where dv1_0.file_md5=? and dv1_0.user_id=? order by dv1_0.chunk_id
+Hibernate: select u1_0.id,u1_0.created_at,u1_0.org_tags,u1_0.password,u1_0.primary_org,u1_0.role,u1_0.updated_at,u1_0.username from users u1_0 where u1_0.id=?
+Hibernate: select u1_0.id,u1_0.created_at,u1_0.org_tags,u1_0.password,u1_0.primary_org,u1_0.role,u1_0.updated_at,u1_0.username from users u1_0 where u1_0.id=?
+2026-08-06T16:31:09.017+08:00  INFO 29760 --- [ArchiveMind] [           main] c.z.archivemind.client.EmbeddingClient   : 开始生成向量（含缓存检查），文本数量: 1
+2026-08-06T16:31:09.024+08:00  INFO 29760 --- [ArchiveMind] [           main] c.z.archivemind.client.EmbeddingClient   : 向量生成完成，总数量: 1
+2026-08-06T16:31:09.257+08:00 DEBUG 29760 --- [ArchiveMind] [           main] o.s.w.r.f.client.ExchangeFunctions       : [47d41097] HTTP POST http://localhost:8088/rerank
+2026-08-06T16:31:09.259+08:00 DEBUG 29760 --- [ArchiveMind] [ctor-http-nio-2] org.springframework.web.HttpLogging      : [47d41097] Encoding [{model=BAAI/bge-reranker-v2-m3, query=为什么 CAP 三者不可兼得？, documents=[该片段属于《分布式理论》章节中“为什么CAP不可兼得”的讲解，通过N (truncated)...]
+2026-08-06T16:31:19.327+08:00 DEBUG 29760 --- [ArchiveMind] [ctor-http-nio-2] o.s.w.r.f.client.ExchangeFunctions       : [47d41097] [2d4f70f7-2] Response 200 OK
+2026-08-06T16:31:19.329+08:00 DEBUG 29760 --- [ArchiveMind] [ctor-http-nio-2] org.springframework.web.HttpLogging      : [47d41097] [2d4f70f7-2] Decoded [{model=BAAI/bge-reranker-v2-m3, results=[{index=0, relevance_score=0.9192607998847961, document={tex (truncated)...]
+2026-08-06T16:31:19.330+08:00  INFO 29760 --- [ArchiveMind] [           main] c.z.archivemind.service.RerankerService  : Reranker 完成, 候选:50 -> 精排:10 -> topK:10, 耗时:10074ms
+Hibernate: select fu1_0.id,fu1_0.created_at,fu1_0.file_md5,fu1_0.file_name,fu1_0.is_public,fu1_0.merged_at,fu1_0.org_tag,fu1_0.status,fu1_0.total_size,fu1_0.user_id from file_upload fu1_0 where fu1_0.file_md5 in (?)
+Hibernate: select count(pd1_0.id) from parsed_documents pd1_0 where pd1_0.file_md5=? and pd1_0.parse_status=?
+Hibernate: select dv1_0.vector_id,dv1_0.block_type,dv1_0.chunk_id,dv1_0.contextualized_content,dv1_0.doc_title,dv1_0.end_offset,dv1_0.file_md5,dv1_0.heading_path,dv1_0.is_public,dv1_0.model_version,dv1_0.org_tag,dv1_0.start_offset,dv1_0.text_content,dv1_0.token_length,dv1_0.user_id from document_vectors dv1_0 where dv1_0.file_md5=? and dv1_0.user_id=? order by dv1_0.chunk_id
+Hibernate: select u1_0.id,u1_0.created_at,u1_0.org_tags,u1_0.password,u1_0.primary_org,u1_0.role,u1_0.updated_at,u1_0.username from users u1_0 where u1_0.id=?
+Hibernate: select u1_0.id,u1_0.created_at,u1_0.org_tags,u1_0.password,u1_0.primary_org,u1_0.role,u1_0.updated_at,u1_0.username from users u1_0 where u1_0.id=?
+2026-08-06T16:31:19.395+08:00  INFO 29760 --- [ArchiveMind] [           main] c.z.archivemind.client.EmbeddingClient   : 开始生成向量（含缓存检查），文本数量: 1
+2026-08-06T16:31:19.401+08:00  INFO 29760 --- [ArchiveMind] [           main] c.z.archivemind.client.EmbeddingClient   : 向量生成完成，总数量: 1
+2026-08-06T16:31:19.807+08:00 DEBUG 29760 --- [ArchiveMind] [           main] o.s.w.r.f.client.ExchangeFunctions       : [2eaafa39] HTTP POST http://localhost:8088/rerank
+2026-08-06T16:31:19.810+08:00 DEBUG 29760 --- [ArchiveMind] [ctor-http-nio-2] org.springframework.web.HttpLogging      : [2eaafa39] Encoding [{model=BAAI/bge-reranker-v2-m3, query=BASE 理论是什么？, documents=[文档标题: 分布式理论。章节路径: 分布式⼀致性算法 > 9.分布式算法pa (truncated)...]
+2026-08-06T16:31:29.855+08:00 DEBUG 29760 --- [ArchiveMind] [ctor-http-nio-2] o.s.w.r.f.client.ExchangeFunctions       : [2eaafa39] [2d4f70f7-3] Response 200 OK
+2026-08-06T16:31:29.858+08:00 DEBUG 29760 --- [ArchiveMind] [ctor-http-nio-2] org.springframework.web.HttpLogging      : [2eaafa39] [2d4f70f7-3] Decoded [{model=BAAI/bge-reranker-v2-m3, results=[{index=0, relevance_score=0.0010969076538458467, document={ (truncated)...]
+2026-08-06T16:31:29.859+08:00  INFO 29760 --- [ArchiveMind] [           main] c.z.archivemind.service.RerankerService  : Reranker 完成, 候选:51 -> 精排:10 -> topK:10, 耗时:10057ms
+Hibernate: select fu1_0.id,fu1_0.created_at,fu1_0.file_md5,fu1_0.file_name,fu1_0.is_public,fu1_0.merged_at,fu1_0.org_tag,fu1_0.status,fu1_0.total_size,fu1_0.user_id from file_upload fu1_0 where fu1_0.file_md5 in (?)
+Hibernate: select count(pd1_0.id) from parsed_documents pd1_0 where pd1_0.file_md5=? and pd1_0.parse_status=?
+Hibernate: select dv1_0.vector_id,dv1_0.block_type,dv1_0.chunk_id,dv1_0.contextualized_content,dv1_0.doc_title,dv1_0.end_offset,dv1_0.file_md5,dv1_0.heading_path,dv1_0.is_public,dv1_0.model_version,dv1_0.org_tag,dv1_0.start_offset,dv1_0.text_content,dv1_0.token_length,dv1_0.user_id from document_vectors dv1_0 where dv1_0.file_md5=? and dv1_0.user_id=? order by dv1_0.chunk_id
+Hibernate: select u1_0.id,u1_0.created_at,u1_0.org_tags,u1_0.password,u1_0.primary_org,u1_0.role,u1_0.updated_at,u1_0.username from users u1_0 where u1_0.id=?
+Hibernate: select u1_0.id,u1_0.created_at,u1_0.org_tags,u1_0.password,u1_0.primary_org,u1_0.role,u1_0.updated_at,u1_0.username from users u1_0 where u1_0.id=?
+2026-08-06T16:31:29.927+08:00  INFO 29760 --- [ArchiveMind] [           main] c.z.archivemind.client.EmbeddingClient   : 开始生成向量（含缓存检查），文本数量: 1
+2026-08-06T16:31:29.932+08:00  INFO 29760 --- [ArchiveMind] [           main] c.z.archivemind.client.EmbeddingClient   : 向量生成完成，总数量: 1
+2026-08-06T16:31:30.339+08:00 DEBUG 29760 --- [ArchiveMind] [           main] o.s.w.r.f.client.ExchangeFunctions       : [254d292c] HTTP POST http://localhost:8088/rerank
+2026-08-06T16:31:30.341+08:00 DEBUG 29760 --- [ArchiveMind] [ctor-http-nio-2] org.springframework.web.HttpLogging      : [254d292c] Encoding [{model=BAAI/bge-reranker-v2-m3, query=常见的分布式锁实现方案有哪些？, documents=[该片段属于《分布式理论》章节中“分布式锁”部分，概述了三种常见分布式 (truncated)...]
+2026-08-06T16:31:41.034+08:00 DEBUG 29760 --- [ArchiveMind] [ctor-http-nio-2] o.s.w.r.f.client.ExchangeFunctions       : [254d292c] [2d4f70f7-4] Response 200 OK
+2026-08-06T16:31:41.036+08:00 DEBUG 29760 --- [ArchiveMind] [ctor-http-nio-2] org.springframework.web.HttpLogging      : [254d292c] [2d4f70f7-4] Decoded [{model=BAAI/bge-reranker-v2-m3, results=[{index=0, relevance_score=0.9993388056755066, document={tex (truncated)...]
+2026-08-06T16:31:41.038+08:00  INFO 29760 --- [ArchiveMind] [           main] c.z.archivemind.service.RerankerService  : Reranker 完成, 候选:50 -> 精排:10 -> topK:10, 耗时:10700ms
+Hibernate: select fu1_0.id,fu1_0.created_at,fu1_0.file_md5,fu1_0.file_name,fu1_0.is_public,fu1_0.merged_at,fu1_0.org_tag,fu1_0.status,fu1_0.total_size,fu1_0.user_id from file_upload fu1_0 where fu1_0.file_md5 in (?)
+Hibernate: select count(pd1_0.id) from parsed_documents pd1_0 where pd1_0.file_md5=? and pd1_0.parse_status=?
+Hibernate: select dv1_0.vector_id,dv1_0.block_type,dv1_0.chunk_id,dv1_0.contextualized_content,dv1_0.doc_title,dv1_0.end_offset,dv1_0.file_md5,dv1_0.heading_path,dv1_0.is_public,dv1_0.model_version,dv1_0.org_tag,dv1_0.start_offset,dv1_0.text_content,dv1_0.token_length,dv1_0.user_id from document_vectors dv1_0 where dv1_0.file_md5=? and dv1_0.user_id=? order by dv1_0.chunk_id
+Hibernate: select u1_0.id,u1_0.created_at,u1_0.org_tags,u1_0.password,u1_0.primary_org,u1_0.role,u1_0.updated_at,u1_0.username from users u1_0 where u1_0.id=?
+Hibernate: select u1_0.id,u1_0.created_at,u1_0.org_tags,u1_0.password,u1_0.primary_org,u1_0.role,u1_0.updated_at,u1_0.username from users u1_0 where u1_0.id=?
+2026-08-06T16:31:41.307+08:00  INFO 29760 --- [ArchiveMind] [           main] c.z.archivemind.client.EmbeddingClient   : 开始生成向量（含缓存检查），文本数量: 1
+2026-08-06T16:31:41.311+08:00  INFO 29760 --- [ArchiveMind] [           main] c.z.archivemind.client.EmbeddingClient   : 向量生成完成，总数量: 1
+2026-08-06T16:31:42.431+08:00 DEBUG 29760 --- [ArchiveMind] [           main] o.s.w.r.f.client.ExchangeFunctions       : [3a183218] HTTP POST http://localhost:8088/rerank
+2026-08-06T16:31:42.437+08:00 DEBUG 29760 --- [ArchiveMind] [ctor-http-nio-2] org.springframework.web.HttpLogging      : [3a183218] Encoding [{model=BAAI/bge-reranker-v2-m3, query=Redis 怎么实现分布式锁？, documents=[该片段属于《分布式理论》章节中“Redis怎么实现分布式锁”部分，介 (truncated)...]
+2026-08-06T16:31:54.981+08:00 DEBUG 29760 --- [ArchiveMind] [ctor-http-nio-2] o.s.w.r.f.client.ExchangeFunctions       : [3a183218] [2d4f70f7-5] Response 200 OK
+2026-08-06T16:31:54.984+08:00 DEBUG 29760 --- [ArchiveMind] [ctor-http-nio-2] org.springframework.web.HttpLogging      : [3a183218] [2d4f70f7-5] Decoded [{model=BAAI/bge-reranker-v2-m3, results=[{index=0, relevance_score=0.9998900890350342, document={tex (truncated)...]
+2026-08-06T16:31:54.984+08:00  INFO 29760 --- [ArchiveMind] [           main] c.z.archivemind.service.RerankerService  : Reranker 完成, 候选:51 -> 精排:10 -> topK:10, 耗时:12559ms
+Hibernate: select fu1_0.id,fu1_0.created_at,fu1_0.file_md5,fu1_0.file_name,fu1_0.is_public,fu1_0.merged_at,fu1_0.org_tag,fu1_0.status,fu1_0.total_size,fu1_0.user_id from file_upload fu1_0 where fu1_0.file_md5 in (?)
+Hibernate: select count(pd1_0.id) from parsed_documents pd1_0 where pd1_0.file_md5=? and pd1_0.parse_status=?
+Hibernate: select dv1_0.vector_id,dv1_0.block_type,dv1_0.chunk_id,dv1_0.contextualized_content,dv1_0.doc_title,dv1_0.end_offset,dv1_0.file_md5,dv1_0.heading_path,dv1_0.is_public,dv1_0.model_version,dv1_0.org_tag,dv1_0.start_offset,dv1_0.text_content,dv1_0.token_length,dv1_0.user_id from document_vectors dv1_0 where dv1_0.file_md5=? and dv1_0.user_id=? order by dv1_0.chunk_id
+Hibernate: select u1_0.id,u1_0.created_at,u1_0.org_tags,u1_0.password,u1_0.primary_org,u1_0.role,u1_0.updated_at,u1_0.username from users u1_0 where u1_0.id=?
+Hibernate: select u1_0.id,u1_0.created_at,u1_0.org_tags,u1_0.password,u1_0.primary_org,u1_0.role,u1_0.updated_at,u1_0.username from users u1_0 where u1_0.id=?
+2026-08-06T16:31:55.075+08:00  INFO 29760 --- [ArchiveMind] [           main] c.z.archivemind.client.EmbeddingClient   : 开始生成向量（含缓存检查），文本数量: 1
+2026-08-06T16:31:55.077+08:00  INFO 29760 --- [ArchiveMind] [           main] c.z.archivemind.client.EmbeddingClient   : 向量生成完成，总数量: 1
+2026-08-06T16:31:56.173+08:00 DEBUG 29760 --- [ArchiveMind] [           main] o.s.w.r.f.client.ExchangeFunctions       : [3d6f45da] HTTP POST http://localhost:8088/rerank
+2026-08-06T16:31:56.176+08:00 DEBUG 29760 --- [ArchiveMind] [ctor-http-nio-2] org.springframework.web.HttpLogging      : [3d6f45da] Encoding [{model=BAAI/bge-reranker-v2-m3, query=什么是分布式事务？, documents=[该片段来自《分布式理论》章节中“什么是分布式事务”部分，属于分布式事务概念的定义 (truncated)...]
+2026-08-06T16:32:06.455+08:00 DEBUG 29760 --- [ArchiveMind] [ctor-http-nio-2] o.s.w.r.f.client.ExchangeFunctions       : [3d6f45da] [2d4f70f7-6] Response 200 OK
+2026-08-06T16:32:06.457+08:00 DEBUG 29760 --- [ArchiveMind] [ctor-http-nio-2] org.springframework.web.HttpLogging      : [3d6f45da] [2d4f70f7-6] Decoded [{model=BAAI/bge-reranker-v2-m3, results=[{index=0, relevance_score=0.9970359802246094, document={tex (truncated)...]
+2026-08-06T16:32:06.458+08:00  INFO 29760 --- [ArchiveMind] [           main] c.z.archivemind.service.RerankerService  : Reranker 完成, 候选:50 -> 精排:10 -> topK:10, 耗时:10292ms
+Hibernate: select fu1_0.id,fu1_0.created_at,fu1_0.file_md5,fu1_0.file_name,fu1_0.is_public,fu1_0.merged_at,fu1_0.org_tag,fu1_0.status,fu1_0.total_size,fu1_0.user_id from file_upload fu1_0 where fu1_0.file_md5 in (?)
+Hibernate: select count(pd1_0.id) from parsed_documents pd1_0 where pd1_0.file_md5=? and pd1_0.parse_status=?
+Hibernate: select dv1_0.vector_id,dv1_0.block_type,dv1_0.chunk_id,dv1_0.contextualized_content,dv1_0.doc_title,dv1_0.end_offset,dv1_0.file_md5,dv1_0.heading_path,dv1_0.is_public,dv1_0.model_version,dv1_0.org_tag,dv1_0.start_offset,dv1_0.text_content,dv1_0.token_length,dv1_0.user_id from document_vectors dv1_0 where dv1_0.file_md5=? and dv1_0.user_id=? order by dv1_0.chunk_id
+Hibernate: select u1_0.id,u1_0.created_at,u1_0.org_tags,u1_0.password,u1_0.primary_org,u1_0.role,u1_0.updated_at,u1_0.username from users u1_0 where u1_0.id=?
+Hibernate: select u1_0.id,u1_0.created_at,u1_0.org_tags,u1_0.password,u1_0.primary_org,u1_0.role,u1_0.updated_at,u1_0.username from users u1_0 where u1_0.id=?
+2026-08-06T16:32:06.507+08:00  INFO 29760 --- [ArchiveMind] [           main] c.z.archivemind.client.EmbeddingClient   : 开始生成向量（含缓存检查），文本数量: 1
+2026-08-06T16:32:06.509+08:00  INFO 29760 --- [ArchiveMind] [           main] c.z.archivemind.client.EmbeddingClient   : 向量生成完成，总数量: 1
+2026-08-06T16:32:06.903+08:00 DEBUG 29760 --- [ArchiveMind] [           main] o.s.w.r.f.client.ExchangeFunctions       : [4f753a9e] HTTP POST http://localhost:8088/rerank
+2026-08-06T16:32:06.904+08:00 DEBUG 29760 --- [ArchiveMind] [ctor-http-nio-2] org.springframework.web.HttpLogging      : [4f753a9e] Encoding [{model=BAAI/bge-reranker-v2-m3, query=分布式事务有哪些常见实现方案？, documents=[文档标题: 分布式理论。章节路径: 7.分布式事务有哪些常⻅的实现⽅ (truncated)...]
+2026-08-06T16:32:16.655+08:00 DEBUG 29760 --- [ArchiveMind] [ctor-http-nio-2] o.s.w.r.f.client.ExchangeFunctions       : [4f753a9e] [2d4f70f7-7] Response 200 OK
+2026-08-06T16:32:16.658+08:00 DEBUG 29760 --- [ArchiveMind] [ctor-http-nio-2] org.springframework.web.HttpLogging      : [4f753a9e] [2d4f70f7-7] Decoded [{model=BAAI/bge-reranker-v2-m3, results=[{index=0, relevance_score=0.9988151788711548, document={tex (truncated)...]
+2026-08-06T16:32:16.659+08:00  INFO 29760 --- [ArchiveMind] [           main] c.z.archivemind.service.RerankerService  : Reranker 完成, 候选:51 -> 精排:10 -> topK:10, 耗时:9761ms
+Hibernate: select fu1_0.id,fu1_0.created_at,fu1_0.file_md5,fu1_0.file_name,fu1_0.is_public,fu1_0.merged_at,fu1_0.org_tag,fu1_0.status,fu1_0.total_size,fu1_0.user_id from file_upload fu1_0 where fu1_0.file_md5 in (?)
+Hibernate: select count(pd1_0.id) from parsed_documents pd1_0 where pd1_0.file_md5=? and pd1_0.parse_status=?
+Hibernate: select dv1_0.vector_id,dv1_0.block_type,dv1_0.chunk_id,dv1_0.contextualized_content,dv1_0.doc_title,dv1_0.end_offset,dv1_0.file_md5,dv1_0.heading_path,dv1_0.is_public,dv1_0.model_version,dv1_0.org_tag,dv1_0.start_offset,dv1_0.text_content,dv1_0.token_length,dv1_0.user_id from document_vectors dv1_0 where dv1_0.file_md5=? and dv1_0.user_id=? order by dv1_0.chunk_id
+Hibernate: select u1_0.id,u1_0.created_at,u1_0.org_tags,u1_0.password,u1_0.primary_org,u1_0.role,u1_0.updated_at,u1_0.username from users u1_0 where u1_0.id=?
+Hibernate: select u1_0.id,u1_0.created_at,u1_0.org_tags,u1_0.password,u1_0.primary_org,u1_0.role,u1_0.updated_at,u1_0.username from users u1_0 where u1_0.id=?
+2026-08-06T16:32:16.707+08:00  INFO 29760 --- [ArchiveMind] [           main] c.z.archivemind.client.EmbeddingClient   : 开始生成向量（含缓存检查），文本数量: 1
+2026-08-06T16:32:16.710+08:00  INFO 29760 --- [ArchiveMind] [           main] c.z.archivemind.client.EmbeddingClient   : 向量生成完成，总数量: 1
+2026-08-06T16:32:16.946+08:00 DEBUG 29760 --- [ArchiveMind] [           main] o.s.w.r.f.client.ExchangeFunctions       : [53f0d946] HTTP POST http://localhost:8088/rerank
+2026-08-06T16:32:16.946+08:00 DEBUG 29760 --- [ArchiveMind] [ctor-http-nio-2] org.springframework.web.HttpLogging      : [53f0d946] Encoding [{model=BAAI/bge-reranker-v2-m3, query=2PC 两阶段提交中有哪些角色？, documents=[该片段属于《分布式系统面试高频题详解》中“分布式事务有哪些常见的实 (truncated)...]
+2026-08-06T16:32:27.136+08:00 DEBUG 29760 --- [ArchiveMind] [ctor-http-nio-2] o.s.w.r.f.client.ExchangeFunctions       : [53f0d946] [2d4f70f7-8] Response 200 OK
+2026-08-06T16:32:27.139+08:00 DEBUG 29760 --- [ArchiveMind] [ctor-http-nio-2] org.springframework.web.HttpLogging      : [53f0d946] [2d4f70f7-8] Decoded [{model=BAAI/bge-reranker-v2-m3, results=[{index=0, relevance_score=0.9940707087516785, document={tex (truncated)...]
+2026-08-06T16:32:27.140+08:00  INFO 29760 --- [ArchiveMind] [           main] c.z.archivemind.service.RerankerService  : Reranker 完成, 候选:50 -> 精排:10 -> topK:10, 耗时:10195ms
+Hibernate: select fu1_0.id,fu1_0.created_at,fu1_0.file_md5,fu1_0.file_name,fu1_0.is_public,fu1_0.merged_at,fu1_0.org_tag,fu1_0.status,fu1_0.total_size,fu1_0.user_id from file_upload fu1_0 where fu1_0.file_md5 in (?)
+Hibernate: select count(pd1_0.id) from parsed_documents pd1_0 where pd1_0.file_md5=? and pd1_0.parse_status=?
+Hibernate: select dv1_0.vector_id,dv1_0.block_type,dv1_0.chunk_id,dv1_0.contextualized_content,dv1_0.doc_title,dv1_0.end_offset,dv1_0.file_md5,dv1_0.heading_path,dv1_0.is_public,dv1_0.model_version,dv1_0.org_tag,dv1_0.start_offset,dv1_0.text_content,dv1_0.token_length,dv1_0.user_id from document_vectors dv1_0 where dv1_0.file_md5=? and dv1_0.user_id=? order by dv1_0.chunk_id
+Hibernate: select u1_0.id,u1_0.created_at,u1_0.org_tags,u1_0.password,u1_0.primary_org,u1_0.role,u1_0.updated_at,u1_0.username from users u1_0 where u1_0.id=?
+Hibernate: select u1_0.id,u1_0.created_at,u1_0.org_tags,u1_0.password,u1_0.primary_org,u1_0.role,u1_0.updated_at,u1_0.username from users u1_0 where u1_0.id=?
+2026-08-06T16:32:27.184+08:00  INFO 29760 --- [ArchiveMind] [           main] c.z.archivemind.client.EmbeddingClient   : 开始生成向量（含缓存检查），文本数量: 1
+2026-08-06T16:32:27.187+08:00  INFO 29760 --- [ArchiveMind] [           main] c.z.archivemind.client.EmbeddingClient   : 向量生成完成，总数量: 1
+2026-08-06T16:32:27.385+08:00 DEBUG 29760 --- [ArchiveMind] [           main] o.s.w.r.f.client.ExchangeFunctions       : [35356aef] HTTP POST http://localhost:8088/rerank
+2026-08-06T16:32:27.385+08:00 DEBUG 29760 --- [ArchiveMind] [ctor-http-nio-2] org.springframework.web.HttpLogging      : [35356aef] Encoding [{model=BAAI/bge-reranker-v2-m3, query=Paxos 算法是什么？, documents=[文档标题: 分布式理论。章节路径: 分布式⼀致性算法 > 9.分布式算法p (truncated)...]
+2026-08-06T16:32:37.317+08:00 DEBUG 29760 --- [ArchiveMind] [ctor-http-nio-2] o.s.w.r.f.client.ExchangeFunctions       : [35356aef] [2d4f70f7-9] Response 200 OK
+2026-08-06T16:32:37.319+08:00 DEBUG 29760 --- [ArchiveMind] [ctor-http-nio-2] org.springframework.web.HttpLogging      : [35356aef] [2d4f70f7-9] Decoded [{model=BAAI/bge-reranker-v2-m3, results=[{index=0, relevance_score=0.997614860534668, document={text (truncated)...]
+2026-08-06T16:32:37.319+08:00  INFO 29760 --- [ArchiveMind] [           main] c.z.archivemind.service.RerankerService  : Reranker 完成, 候选:50 -> 精排:10 -> topK:10, 耗时:9934ms
+Hibernate: select fu1_0.id,fu1_0.created_at,fu1_0.file_md5,fu1_0.file_name,fu1_0.is_public,fu1_0.merged_at,fu1_0.org_tag,fu1_0.status,fu1_0.total_size,fu1_0.user_id from file_upload fu1_0 where fu1_0.file_md5 in (?)
+Hibernate: select count(pd1_0.id) from parsed_documents pd1_0 where pd1_0.file_md5=? and pd1_0.parse_status=?
+Hibernate: select dv1_0.vector_id,dv1_0.block_type,dv1_0.chunk_id,dv1_0.contextualized_content,dv1_0.doc_title,dv1_0.end_offset,dv1_0.file_md5,dv1_0.heading_path,dv1_0.is_public,dv1_0.model_version,dv1_0.org_tag,dv1_0.start_offset,dv1_0.text_content,dv1_0.token_length,dv1_0.user_id from document_vectors dv1_0 where dv1_0.file_md5=? and dv1_0.user_id=? order by dv1_0.chunk_id
+Hibernate: select u1_0.id,u1_0.created_at,u1_0.org_tags,u1_0.password,u1_0.primary_org,u1_0.role,u1_0.updated_at,u1_0.username from users u1_0 where u1_0.id=?
+Hibernate: select u1_0.id,u1_0.created_at,u1_0.org_tags,u1_0.password,u1_0.primary_org,u1_0.role,u1_0.updated_at,u1_0.username from users u1_0 where u1_0.id=?
+2026-08-06T16:32:37.364+08:00  INFO 29760 --- [ArchiveMind] [           main] c.z.archivemind.client.EmbeddingClient   : 开始生成向量（含缓存检查），文本数量: 1
+2026-08-06T16:32:37.366+08:00  INFO 29760 --- [ArchiveMind] [           main] c.z.archivemind.client.EmbeddingClient   : 向量生成完成，总数量: 1
+2026-08-06T16:32:37.713+08:00 DEBUG 29760 --- [ArchiveMind] [           main] o.s.w.r.f.client.ExchangeFunctions       : [72577420] HTTP POST http://localhost:8088/rerank
+2026-08-06T16:32:37.713+08:00 DEBUG 29760 --- [ArchiveMind] [ctor-http-nio-2] org.springframework.web.HttpLogging      : [72577420] Encoding [{model=BAAI/bge-reranker-v2-m3, query=怎么保证接口幂等性？, documents=[文档标题: 分布式理论。章节路径: 怎么保证接口幂等性？。内容类型: para (truncated)...]
+2026-08-06T16:32:44.113+08:00 DEBUG 29760 --- [ArchiveMind] [ctor-http-nio-2] o.s.w.r.f.client.ExchangeFunctions       : [72577420] [2d4f70f7-10] Response 200 OK
+2026-08-06T16:32:44.115+08:00 DEBUG 29760 --- [ArchiveMind] [ctor-http-nio-2] org.springframework.web.HttpLogging      : [72577420] [2d4f70f7-10] Decoded [{model=BAAI/bge-reranker-v2-m3, results=[{index=0, relevance_score=0.9923498034477234, document={tex (truncated)...]
+2026-08-06T16:32:44.115+08:00  INFO 29760 --- [ArchiveMind] [           main] c.z.archivemind.service.RerankerService  : Reranker 完成, 候选:50 -> 精排:10 -> topK:10, 耗时:6404ms
+Hibernate: select fu1_0.id,fu1_0.created_at,fu1_0.file_md5,fu1_0.file_name,fu1_0.is_public,fu1_0.merged_at,fu1_0.org_tag,fu1_0.status,fu1_0.total_size,fu1_0.user_id from file_upload fu1_0 where fu1_0.file_md5 in (?)
+2026-08-06T16:32:44.277+08:00  INFO 29760 --- [ArchiveMind] [           main] com.zyh.archivemind.eval.EvalRunner      : ArchiveMind 离线评测完成: runId=eval-20260806-163047-4621b1be, cases=10, failures=0, report=D:\IntelliJ IDEA 2024.3\IdeaProjects\ArchiveMind\eval\outputs\eval_report.md
+2026-08-06T16:32:44.278+08:00  INFO 29760 --- [ArchiveMind] [           main] com.zyh.archivemind.eval.EvalRunner      : eval.runner.exit-on-complete=true, exitCode=0
+2026-08-06T16:32:44.301+08:00  INFO 29760 --- [ArchiveMind] [ntainer#0-0-C-1] o.s.k.l.KafkaMessageListenerContainer    : file-processing-group: partitions revoked: [file-processing-topic1-0]
+2026-08-06T16:32:44.740+08:00  INFO 29760 --- [ArchiveMind] [ntainer#0-0-C-1] o.s.k.l.KafkaMessageListenerContainer    : file-processing-group: Consumer stopped
+2026-08-06T16:32:44.746+08:00  INFO 29760 --- [ArchiveMind] [ionShutdownHook] o.s.b.w.e.tomcat.GracefulShutdown        : Commencing graceful shutdown. Waiting for active requests to complete
+2026-08-06T16:32:44.769+08:00  INFO 29760 --- [ArchiveMind] [tomcat-shutdown] o.s.b.w.e.tomcat.GracefulShutdown        : Graceful shutdown complete
+2026-08-06T16:32:46.881+08:00  INFO 29760 --- [ArchiveMind] [ionShutdownHook] j.LocalContainerEntityManagerFactoryBean : Closing JPA EntityManagerFactory for persistence unit 'default'
+2026-08-06T16:32:46.886+08:00  INFO 29760 --- [ArchiveMind] [ionShutdownHook] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Shutdown initiated...
+2026-08-06T16:32:46.907+08:00  INFO 29760 --- [ArchiveMind] [ionShutdownHook] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Shutdown completed.
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD SUCCESS
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  03:10 min
+[INFO] Finished at: 2026-08-06T16:32:47+08:00
+[INFO] ------------------------------------------------------------------------

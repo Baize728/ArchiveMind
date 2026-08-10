@@ -1,0 +1,11 @@
+ragas==0.4.3
+openai==2.53.0
+
+# RAGAS 0.4.3 still imports legacy LangChain community modules such as
+# langchain_community.chat_models.vertexai. Keep LangChain on the 0.3 line
+# to avoid resolving to LangChain 1.x, where that import path is gone.
+langchain==0.3.30
+langchain-community==0.3.31
+langchain-core==0.3.86
+langchain-openai==0.3.35
+jiter==0.14.0
